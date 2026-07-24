@@ -1,6 +1,6 @@
 # Human-Heart-Cell-Atlas
 
-The Human Heart Cell Atlas (HHCA) is a community-driven, integrated reference of cellular diversity in the healthy human heart. It combines single-nucleus RNA sequencing data from 15 studies, covering eight anatomical regions and approximately 1.5 million nuclei from 477 samples across 280 individuals.
+The Human Heart Cell Atlas (HHCA) is a community-driven, integrated reference of cellular diversity in the healthy human heart. It combines single-nucleus RNA sequencing data from 15 published and unpublished studies, covering eight anatomical regions and approximately 1.5 million nuclei from 477 samples across 280 individuals.
 
 All datasets were reprocessed using standardized analytical pipelines, with harmonized technical and donor metadata. Through iterative, consensus-based annotation, the HHCA defines 100 cardiac cell states across four levels of resolution, including rare cell populations.
 
