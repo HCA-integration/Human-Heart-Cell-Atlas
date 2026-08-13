@@ -1,0 +1,12 @@
+* text=auto
+
+# text files
+*.txt text eol=lf
+*.py text eol=lf
+*.ipynb text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+
+# binary files
+*.jpg binary
+*.png binary
