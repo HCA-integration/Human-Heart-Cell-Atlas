@@ -1,0 +1,64 @@
+output_dir: ./pipeline/final_metrics/
+images: ./pipeline/final_metrics/images
+use_gpu: true
+
+env_mode: local
+
+resources:
+  cpu:
+    partition: cpu_p
+    qos: cpu_normal
+    gpu: 0
+    mem_mb: 300000
+  gpu:
+    partition: gpu_p
+    qos: gpu_normal
+    gpu: 1
+    mem_mb: 300000
+
+DATASETS:
+
+  benchmark:
+
+    # input specification: map of module name to map of input file name to input file path
+    input:
+      metrics:
+        drvi_3000_hvgs: ./pipeline/benchmark/integration/dataset~benchmark/file_id~preprocessing:benchmark/batch~donor_id/var_mask~highly_variable/method~drvi--hyperparams~f2b599c5c8--label~None--output_type~embed.zarr
+        harmonypy_3000_hvgs: ./pipeline/benchmark/integration/dataset~benchmark/file_id~preprocessing:benchmark/batch~donor_id/var_mask~highly_variable/method~harmonypy--hyperparams~b67706dea4--label~None--output_type~embed.zarr
+        scanvi_3000_hvgs: ./pipeline/benchmark/integration/dataset~benchmark/file_id~preprocessing:benchmark/batch~donor_id/var_mask~highly_variable/method~scanvi--hyperparams~8a3acca17f--label~Final Level 4_harmonized--output_type~embed.zarr
+        scpoli_3000_hvgs_celltype: ./pipeline/benchmark/integration/dataset~benchmark/file_id~preprocessing:benchmark/batch~donor_id/var_mask~highly_variable/method~scpoli--hyperparams~8f257240c1--label~Final Level 4_harmonized--output_type~embed.zarr
+        scpoli_3000_hvgs_no_celltype: ./pipeline/benchmark/integration/dataset~benchmark/file_id~benchmark/batch~donor_id/var_mask~highly_variable/method~scpoli--hyperparams~0e6dc5f683--label~None--output_type~embed.zarr
+        scvi_3000_hvgs: ./pipeline/benchmark/integration/dataset~benchmark/file_id~preprocessing:benchmark/batch~donor_id/var_mask~highly_variable/method~scvi--hyperparams~f1ddeb565f--label~None--output_type~embed.zarr
+        drvi_4000_hvgs: ./pipeline/benchmark_4000_hvgs/integration/dataset~benchmark/file_id~preprocessing:benchmark/batch~donor_id/var_mask~highly_variable/method~drvi--hyperparams~f2b599c5c8--label~None--output_type~embed.zarr
+        harmonypy_4000_hvgs: ./pipeline/benchmark_4000_hvgs/integration/dataset~benchmark/file_id~preprocessing:benchmark/batch~donor_id/var_mask~highly_variable/method~harmonypy--hyperparams~b67706dea4--label~None--output_type~embed.zarr
+        scanvi_4000_hvgs: ./pipeline/benchmark_4000_hvgs/integration/dataset~benchmark/file_id~preprocessing:benchmark/batch~donor_id/var_mask~highly_variable/method~scanvi--hyperparams~8a3acca17f--label~Final Level 4_harmonized--output_type~embed.zarr
+        scpoli_4000_hvgs_celltype: ./pipeline/benchmark_4000_hvgs/integration/dataset~benchmark/file_id~preprocessing:benchmark/batch~donor_id/var_mask~highly_variable/method~scpoli--hyperparams~8f257240c1--label~Final Level 4_harmonized--output_type~embed.zarr
+        scpoli_4000_hvgs_no_celltype: ./pipeline/benchmark_4000_hvgs/integration/dataset~benchmark/file_id~benchmark/batch~donor_id/var_mask~highly_variable/method~scpoli--hyperparams~0e6dc5f683--label~None--output_type~embed.zarr
+        scvi_4000_hvgs: ./pipeline/benchmark_4000_hvgs/integration/dataset~benchmark/file_id~preprocessing:benchmark/batch~donor_id/var_mask~highly_variable/method~scvi--hyperparams~f1ddeb565f--label~None--output_type~embed.zarr
+        drvi_custom_hvgs: ./pipeline/benchmark_manual_hvgs/integration/dataset~benchmark_manual_hvgs/file_id~benchmark_manual_hvgs/batch~donor_id/var_mask~highly_variable/method~drvi--hyperparams~f2b599c5c8--label~None--output_type~embed.zarr
+        harmonypy_custom_hvgs: ./pipeline/benchmark_manual_hvgs/integration/dataset~benchmark_manual_hvgs/file_id~benchmark_manual_hvgs/batch~donor_id/var_mask~highly_variable/method~harmonypy--hyperparams~b67706dea4--label~None--output_type~embed.zarr
+        scanvi_custom_hvgs: ./pipeline/benchmark_manual_hvgs/integration/dataset~benchmark_manual_hvgs/file_id~benchmark_manual_hvgs/batch~donor_id/var_mask~highly_variable/method~scanvi--hyperparams~8a3acca17f--label~Final Level 4_harmonized--output_type~embed.zarr
+        scpoli_custom_hvgs_celltype: ./pipeline/benchmark_manual_hvgs/integration/dataset~benchmark_manual_hvgs/file_id~benchmark_manual_hvgs/batch~donor_id/var_mask~highly_variable/method~scpoli--hyperparams~8f257240c1--label~Final Level 4_harmonized--output_type~embed.zarr
+        scpoli_custom_hvgs_no_celltype: ./pipeline/benchmark_manual_hvgs/integration/dataset~benchmark_manual_hvgs/file_id~benchmark_manual_hvgs/batch~donor_id/var_mask~highly_variable/method~scpoli--hyperparams~0e6dc5f683--label~None--output_type~embed.zarr
+        scvi_custom_hvgs: ./pipeline/benchmark_manual_hvgs/integration/dataset~benchmark_manual_hvgs/file_id~benchmark_manual_hvgs/batch~donor_id/var_mask~highly_variable/method~scvi--hyperparams~f1ddeb565f--label~None--output_type~embed.zarr
+
+    # module configuration
+    metrics:
+      unintegrated: layers/normcounts
+      batch: donor_id
+      label: 
+        - "Final Level 3_harmonized"
+      metrics:
+        - asw_batch
+        - graph_connectivity
+        - ilisi
+        - pcr_comparison
+        - asw_label
+        - cell_cycle
+        - clisi
+        - isolated_label_asw
+        - morans_i_random
+        - kbet_pg
+        - pcr_random
+        - pcr
+        - pcr_genes

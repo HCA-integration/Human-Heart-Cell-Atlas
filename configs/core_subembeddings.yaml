@@ -1,0 +1,94 @@
+output_dir: ./pipeline/core_subembeddings/
+images: ./pipeline/core_subembeddings/images
+use_gpu: true
+
+env_mode: local
+
+resources:
+  cpu:
+    partition: cpu_p
+    qos: cpu_normal
+    gpu: 0
+    mem_mb: 300000
+  gpu:
+    partition: gpu_p
+    qos: gpu_normal
+    gpu: 2
+    mem_mb: 300000
+
+DATASETS:
+
+  core_subembeddings:
+
+    input:
+      preprocessing:
+        core_vCM: "./datasets/core_subobjects/new_cleaned_subobjects/new_cleaned_vCM_subobject.h5ad"
+        core_fibroblast: "./datasets/core_subobjects/new_cleaned_subobjects/new_cleaned_fibroblast_subobject.h5ad"
+        core_aCM: "./datasets/core_subobjects/new_cleaned_subobjects/new_cleaned_aCM_subobject.h5ad"
+        core_adipocyte: "./datasets/core_subobjects/new_cleaned_subobjects/new_cleaned_adipocytes_subobject.h5ad"
+        core_bcell: "./datasets/core_subobjects/new_cleaned_subobjects/new_cleaned_bcell_subobject.h5ad"
+        core_endocardial_endothelial: "./datasets/core_subobjects/new_cleaned_subobjects/new_cleaned_endocardial_endothelial_subobject.h5ad"
+        core_lymphatic_endothelial: "./datasets/core_subobjects/new_cleaned_subobjects/new_cleaned_lymphatic_endothelial_subobject.h5ad"
+        core_mastcell: "./datasets/core_subobjects/new_cleaned_subobjects/new_cleaned_mastcell_subobject.h5ad"
+        core_lymphoid: "./datasets/core_subobjects/new_cleaned_subobjects/new_cleaned_lymphoid_subobject.h5ad"
+        core_mesothelial: "./datasets/core_subobjects/new_cleaned_subobjects/new_cleaned_mesothelial_subobject.h5ad"
+        core_mural: "./datasets/core_subobjects/new_cleaned_subobjects/new_cleaned_mural_subobject.h5ad"
+        core_myeloid: "./datasets/core_subobjects/new_cleaned_subobjects/new_cleaned_myeloid_subobject.h5ad"
+        core_neural: "./datasets/core_subobjects/new_cleaned_subobjects/new_cleaned_neural_subobject.h5ad"
+        core_vascular_endothelial: "./datasets/core_subobjects/new_cleaned_subobjects/new_cleaned_vascular_endothelial_subobject.h5ad"
+      integration: preprocessing
+    
+    # module configuration
+    preprocessing:
+      raw_counts: X
+      highly_variable_genes:
+        n_top_genes: 2000
+        batch_key: donor_id
+      pca:
+        n_comps: 30
+      assemble:
+        - counts
+        - normalize
+        - highly_variable_genes
+        - pca
+        - umap
+        - neighbors
+
+    integration:
+      raw_counts: layers/counts
+      norm_counts: layers/normcounts
+      var_mask:
+        - highly_variable
+      batch:
+        - donor_id
+      neighbors:
+        n_neighbors: 30
+      seed: 0
+      threads: 4
+      output_types:
+        - embed
+        - full
+
+      umap_colors:
+        - dataset
+        - cell_type
+        - sex
+        - disease
+        - assay
+        - suspension_type
+        - "Final Level 1_harmonized"
+        - "Final Level 2_harmonized"
+        - "Final Level 3_harmonized"
+        - "Final Level 4_harmonized"
+        - n_counts
+        - n_genes
+        - percent_mito
+        
+      methods:
+        drvi:
+          max_epochs: 200
+          encode_covariates: true
+          n_latent: 64
+          early_stopping: true
+          early_stopping_patience: 10
+      

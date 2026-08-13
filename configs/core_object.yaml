@@ -1,0 +1,110 @@
+output_dir: ./pipeline/core_object/
+images: ./pipeline/core_object/images
+use_gpu: true
+
+env_mode: local
+
+resources:
+  cpu:
+    partition: cpu_p
+    qos: cpu_normal
+    gpu: 0
+    mem_mb: 400000
+  gpu:
+    partition: gpu_p
+    qos: gpu_normal
+    gpu: 1
+    mem_mb: 400000
+
+DATASETS:
+
+  core_object:
+
+    # input specification: map of module name to map of input file name to input file path
+    input:
+      qc:
+        core_object: ./datasets/cleaned/realigned_onlynuc_healthy.h5ad
+      doublets: qc
+      filter: doublets
+      preprocessing: filter
+      integration: preprocessing
+    
+    # module configuration
+    qc:
+      hue:
+        - dataset
+      counts: X
+      scautoqc_metrics:
+        - n_counts
+        - n_genes
+        - percent_mito
+    doublets:
+      counts: X
+      batch: donor_id
+      chunk_size: 100_000
+    
+    filter:
+      subset: true
+      remove_by_column:
+        qc_status:
+          - failed
+        scrublet_prediction:
+          - True
+
+    # module configuration
+    preprocessing:
+      raw_counts: X
+      highly_variable_genes:
+        n_top_genes: 
+          - 3000
+        batch_key: donor_id
+      pca:
+        n_comps: 50
+      assemble:
+        - counts
+        - normalize
+        - highly_variable_genes
+        - pca
+        - umap
+        - neighbors
+
+    integration:
+      raw_counts: layers/counts
+      norm_counts: layers/normcounts
+      var_mask:
+        - highly_variable
+      batch:
+        - donor_id
+      label:
+        - "Final Level 4_harmonized"
+      neighbors:
+        n_neighbors: 30
+      seed: 0
+      threads: 4
+      output_types:
+        - embed
+        - full
+
+      umap_colors:
+        - dataset
+        - cell_type
+        - sex
+        - disease
+        - assay
+        - suspension_type
+        - "Final Level 1_harmonized"
+        - "Final Level 2_harmonized"
+        - "Final Level 3_harmonized"
+        - "Final Level 4_harmonized"
+        - n_counts
+        - n_genes
+        - percent_mito
+        
+      methods: # mandatory, needs at least 1 value
+
+        drvi:
+          max_epochs: 200
+          encode_covariates: true
+          n_latent: 128
+          early_stopping: true
+          early_stopping_patience: 20
