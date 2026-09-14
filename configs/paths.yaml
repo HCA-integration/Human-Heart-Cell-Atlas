@@ -1,0 +1,22 @@
+# Filesystem roots. Every value can be overridden by an environment variable HHCA_<NAME>.
+# "{REPO}" expands to the repository root.
+
+# --- figure tier (laptop) ---------------------------------------------------------------
+tables: /Volumes/Storage/hhca_spatial_tables        # processed-table bundle (Zenodo)
+out: "{REPO}/output"
+
+# --- compute tier, local machine ----------------------------------------------------------
+analysis: /Users/maiia.shulman/IRIS_v5/manuscript_cell_submission/20250403_gp_human_healthy_heart/scanpy_analysis
+project: /Users/maiia.shulman/IRIS_v5/manuscript_cell_submission/20250403_gp_human_healthy_heart
+results: /Volumes/Storage/heart_results
+storage: /Volumes/Storage
+venv: /Users/maiia.shulman/IRIS_v5/.venv
+conda: /Users/maiia.shulman/anaconda3
+home: /Users/maiia.shulman
+
+# --- compute tier, Helmholtz HPC ----------------------------------------------------------
+hpc_workspace: /ictstr01/groups/ml01/workspace/maiia.shulman
+hpc_home: /home/icb/maiia.shulman
+hpc_analysis: /home/icb/maiia.shulman/Heart/20250403_gp_human_healthy_heart/scanpy_analysis
+hpc_scratch: /lustre/scratch/users/maiia.shulman
+atlas_project: /lustre/groups/ml01/projects/2024_heart_atlas_integration_and_analysis_lennard.halle
