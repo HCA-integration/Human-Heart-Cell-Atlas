@@ -1,0 +1,265 @@
+# Pipeline `cardiomyocyte`: Fig 3 d, e, f-h, i, k, l; Fig 1 j; ED6 d, e, f.
+# Read by the scripts in scripts/cardiomyocyte/ (driver run_cardiomyocyte.sh), by the figure panels and by
+# notebooks/02_cardiomyocytes.ipynb. Outputs go to results/cardiomyocyte/.
+#
+# Substrate: the CMFLAG-clean 2 um h5ads of pipeline `substrate` (results/substrate/clean_h5ad/), its FICTURE outputs
+# (results/substrate/{decode,model}) and the CMFLAG flags and registrations (results/substrate/cmflag/). Per-slide
+# analyses use all 11 slides; transmural analyses use the donors with epi / myo / endo sections (H0054 and H0063
+# trios; AH10 epi and endo).
+#
+# {name} = a root below; {slide} = slide id; {base} = slide id without VS_. Relative paths start at the repository root.
+
+roots:
+  heart: /path/to/visium_hd          # Visium HD project folder (registered H&E)
+  inputs: /path/to/hhca_inputs              # staged inputs (DVP tables, Fig 1 j gallery crops)
+  atlas: /path/to/atlas                     # folder with the HHCA atlas h5ad
+
+slides:
+  berlin: [VS_CA_H0054LV_henricke_epi, VS_CA_H0054LV_henricke_myo, VS_CA_H0054LV_henricke_endo,
+           VS_CA_H0063LV_henricke_epi, VS_CA_H0063LV_henricke_myo, VS_CA_H0063LV_henricke_endo,
+           VS_BO_HDZ150319_34_myo, VS_BO_2024BH-008_myo]          # slide order of the niche tables (Fig 3 f-h)
+  ah: [VS_AH9_LV_FW_epi, VS_AH10_LV_mid_epi, VS_AH10_LV_mid_endo]
+  endo_sections: [VS_CA_H0054LV_henricke_endo, VS_CA_H0063LV_henricke_endo, VS_AH10_LV_mid_endo]
+
+# Donor and position in the wall of every section (epi = near the epicardium, myo = mid-myocardium, endo = near the
+# endocardium)
+sections:
+  VS_CA_H0054LV_henricke_epi: {donor: H0054, layer: epi}
+  VS_CA_H0054LV_henricke_myo: {donor: H0054, layer: myo}
+  VS_CA_H0054LV_henricke_endo: {donor: H0054, layer: endo}
+  VS_CA_H0063LV_henricke_epi: {donor: H0063, layer: epi}
+  VS_CA_H0063LV_henricke_myo: {donor: H0063, layer: myo}
+  VS_CA_H0063LV_henricke_endo: {donor: H0063, layer: endo}
+  VS_BO_HDZ150319_34_myo: {donor: HDZ, layer: myo}
+  VS_BO_2024BH-008_myo: {donor: BH008, layer: myo}
+  VS_AH9_LV_FW_epi: {donor: AH9, layer: epi}
+  VS_AH10_LV_mid_epi: {donor: AH10, layer: epi}
+  VS_AH10_LV_mid_endo: {donor: AH10, layer: endo}
+
+cell_types:
+  ventricular: Ventricular Cardiomyocytes
+  cardiomyocytes: [Ventricular Cardiomyocytes, Atrial Cardiomyocytes]
+
+paths:
+  h5ad_2um: "results/substrate/clean_h5ad/h5ad_2um_CMFLAG_clean/{slide}.h5ad"   # CMFLAG-clean 2 um bins
+  h5ad_8um: "results/substrate/clean_h5ad/h5ad_8um_CMFLAG_clean/{slide}.h5ad"   # section overview (notebook)
+  h5ad_2um_full: "results/substrate/h5ad_2um/{slide}.h5ad"
+  decode: "results/substrate/decode/{slide}/output/atlas_L3.decode.prj_12.r_4.0_5.0.pixel.tsv.gz"
+  posterior: "results/substrate/decode/{slide}/output/atlas_L3.decode.prj_12.r_4.0_5.0.posterior.count.tsv.gz"
+  transcripts: "results/substrate/decode/{slide}/inputs/transcripts.tsv.gz"
+  factor_order: "results/substrate/model/atlas_L3_factor_order.json"
+  model_pseudobulk: "results/substrate/model/atlas_L3_pseudobulk.tsv"
+  niche_flags: "results/substrate/cmflag/flags/{slide}_clean_bins.parquet"
+  registration: "results/substrate/cmflag/registration/{slide}_align_grids.npz"
+  he_tif: "{heart}/scanpy_analysis/ficture/fullslide_2um_L3/_mdc_he/{base}.tif"
+
+# Which of the computed variants each figure panel draws.
+panels:
+  fig3i_cm_rule: cm_safe_pre          # atlas cm_safe filter applied to all genes before ranking by transmural rho
+  fig3l_substrate: cmflag_2um_3donor  # substrate label in fig3l_concordance_genes.csv: 2 um CMFLAG-clean
+                                      # ventricular CM bins, H0054 + H0063 trios + AH10 epi/endo
+  fig3l_gene_set: dvp_rule_cmsafe     # Methods DVP rule (raw p < 0.05 in both cohorts, same sign) & cm_safe
+  fig3d_geneset: stress18             # the 18-gene stress score
+  ed6e_variant: posterior             # FICTURE decode posterior counts per factor (definition in ed6e below)
+
+# DVP protein trend tables of the two DVP cohorts (inputs of Fig 3 l)
+dvp:
+  all: "{inputs}/cardiomyocyte/dvp/trend_analysis_all.xlsx"
+  candidates: "{inputs}/cardiomyocyte/dvp/trend_analysis_top_candidates.xlsx"
+
+atlas:
+  h5ad: "{atlas}/final_cleaned_hhca_annotated.h5ad"   # 1,459,368 x 36,601, layers counts/normcounts
+  layer: normcounts
+  level: Final Level 3_harmonized
+  levels: [Final Level 2_harmonized, Final Level 3_harmonized]   # cell-type columns of the pseudobulk tables
+  chunk: 20000
+
+# Cardiomyocyte specificity of a gene in the atlas (Level-3 mean normcounts): cm_safe = expressed and specific
+specificity:
+  min_ventricular_mean: 0.05   # expressed: ventricular-CM mean normcount (stromal, endothelial contaminants ~10x lower)
+  min_ratio: 1.0               # specific: max(CM types) / max(other types) >= 1, a cardiomyocyte type is the top expresser
+
+# Fig 3 d stress score (H0054 trio). stress18 = the 18-gene stress score drawn in the panel; stress6 = ANKRD1, XIRP1,
+# XIRP2, ACTA1, NPPA, NPPB (computed on the same fields).
+fig3d:
+  genesets:
+    stress18: [NPPA, NPPB, ANKRD1, ACTA1, MYH7, TNNI1, XIRP2, XIRP1, CSRP3, FHL1, MYOT, FLNC, DES, CRYM, CMYA5,
+               BAG3, CRYAB, POSTN]
+    stress6: [ANKRD1, XIRP1, XIRP2, ACTA1, NPPA, NPPB]
+  # fields [xlo, xhi, ylo, yhi] um, used for both gene sets (stress_score.py --fields): the 650 um tiles that the field
+  # rule of stress_score.py (tiles with >= 4000 vCM bins ranked by mean score; 10th / 50th / 90th percentile for
+  # epi / myo / endo) picks with stress18; float32 bin coordinates. The panel shows x in [xlo, xlo + 255] and
+  # y in [ylo + 75, ylo + 650] of each field.
+  fields:
+    epi: [8996.7998046875, 9646.7998046875, 412.29998779296875, 1062.2999877929688]
+    myo: [3806.5999755859375, 4456.5999755859375, 4955.899993896484, 5605.899993896484]
+    endo: [6917.5999755859375, 7567.5999755859375, 823.0, 1473.0]
+  strip: {w: 255.0, y0: 75.0, y1: 650.0}
+  vmin_vmax: [-0.13, 0.30]
+  sections: {epi: VS_CA_H0054LV_henricke_epi, myo: VS_CA_H0054LV_henricke_myo, endo: VS_CA_H0054LV_henricke_endo}
+  field_um: 650.0        # side of the tiles and fields
+  grid_um: 5.0           # display grid of a field
+  min_tile_bins: 4000    # ventricular-CM bins a tile needs to be ranked
+  pick: {epi: 0.10, myo: 0.50, endo: 0.90}   # percentile of the tile ranking shown per section
+  chunk: 250000          # 2 um bins read at a time
+
+# Fig 3 e: 500 um subendocardial field of H0054 endo
+fig3e:
+  slide: VS_CA_H0054LV_henricke_endo
+  centre_um: [5250.0, 3250.0]
+  size_um: 500.0
+  genes: [NPPA, NPPB]
+
+# Fig 3 f-h: NPPA / NPPB niches on 10 um bins of the decode pixels and transcripts
+niche:
+  genes: [NPPA, NPPB]
+  grid_um: 10.0          # bin size for composition and transcript density
+  min_pixels: 4          # decode pixels an in-tissue bin needs
+  cm_fraction: 0.50      # cardiomyocyte bin: >= 50 % of the pixels are cardiomyocyte
+  radius_um: 30.0        # radius of the neighbourhood fractions
+  high_quantile: 0.90    # gene-high = top decile of the non-zero densities among cardiomyocyte bins
+  rich: {fibroblast: 0.30, endocardial: 0.10, vessel: 0.30}   # fraction above which a bin is rich in a group
+  groups:                # cell-type group -> Level-3 types
+    CM: [Ventricular Cardiomyocytes, Atrial Cardiomyocytes]
+    vCM: [Ventricular Cardiomyocytes]
+    aCM: [Atrial Cardiomyocytes]
+    fibroblast: [Fibroblasts]
+    endocardial: [Endocardial Endothelial Cells]
+    vessel: [Arterial Endothelial cells, Capillary Endothelial cells, Venous Endothelial cells,
+             Vascular Smooth Muscle cells, Pericytes]
+    immune: [Macrophages, Monocytes, Dendritic cells, Mast cells, ILC, Lymphoid Cells (Proliferating), NK cells,
+             B cells, Plasma Cells, T cells]
+    epicardium: [Epicardium]
+  neighbourhoods: [fibroblast, endocardial, vessel, immune, CM]   # groups with a neighbourhood fraction
+  metrics:               # tested metric -> side of the one-sided test (gene-high against the other CM bins)
+    nbhd_fibroblast: greater
+    nbhd_endocardial: greater
+    nbhd_vessel: greater
+    nbhd_immune: greater
+    dist_fibroblast_um: less
+    dist_endocardial_um: less
+    dist_vessel_um: less
+  n_perm: 2000           # label permutations per test
+  seed: 0
+  alpha: 0.05
+  transcript_chunk: 3000000   # transcript rows read at a time
+
+# Fig 3 i: transmural profiles and gene modules
+transmural:
+  layers: [epi, myo, endo]                      # order of the sections across the wall
+  donors: [H0054, H0063, AH10]                  # AH10 has no mid-myocardial section
+  bins_per_section: 15                          # 45 bins across the wall
+  endo_markers: [NPPA, NPPB, POSTN]             # marker score = endocardial minus epicardial markers
+  epi_markers: [MSLN, WT1, UPK3B, BNC1, KRT19]
+  grid_um: 40.0          # grid step of the Laplace problem
+  face_fraction: 0.08    # share of the projected tissue span that counts as the epicardial / endocardial face
+  min_detection: 0.002   # pooled H0054 + H0063 detection (fraction of CM bins with counts) a gene needs
+  sigma: 1.3             # Gaussian smoothing of the profiles, in bins
+  n_endo: 6              # module sizes
+  n_epi: 4
+  hand_drop: [MMP2, SPARC]                      # stromal genes left out by the rule `hand_drop`
+
+# Fig 3 l: transcript slopes of the section pseudobulks against the DVP protein slopes
+fig3l:
+  chunk: 400000          # 2 um bins read at a time
+  two_donors: [H0054, H0063]
+  p_max: 0.05            # DVP rule: raw p below this in both cohorts, same slope sign
+  candidate_sheets: [CMs_epi_to_endo_both, CMs_endo_to_epi_both]
+  # hand-curated structural cardiomyocyte genes
+  structural_axis: [TNNI1, MYOT, FHL1, CRYM, CSRP3, FLNC, DES, XIRP1, XIRP2, SYNPO2L, LMOD2, CMYA5, POSTN, COL1A1,
+                    BAG3, CRYAB, MYL7, GUCY1A1, GUCY1B1, MYL2, TNNT2, ANKRD1]
+  # the 17 of them that the ratio rule is expected to keep
+  axis17: [TNNI1, FHL1, CRYM, CSRP3, FLNC, DES, XIRP1, XIRP2, SYNPO2L, LMOD2, CMYA5, BAG3, CRYAB, MYL7, MYL2, TNNT2,
+           ANKRD1]
+  # curated gene panels of the concordance statistics (concordance_stats.csv); cm_structural_axis = structural_axis
+  gene_panels:
+    endo_marker: [NPR3, PLVAP, NPPB, POSTN, CDH5]
+    epi_marker: [MSLN, WT1, UPK3B, BNC1, KRT19, DCN]
+    conduction: [GJA5, GJA1, SCN5A, HCN4, CACNA1D, IRX3, IRX5]
+    stress_strain: [NPPA, NPPB, ANKRD1, ACTA1, MYH7, TNNI1, XIRP2, XIRP1, CSRP3, FHL1, MYOT, FLNC, DES, CRYM, CMYA5,
+                    BAG3, CRYAB]
+    mature_contractile: [MYL7, MYL2, TNNT2, TNNI3, GUCY1A1, GUCY1B1]
+    ECM: [COL1A1, COL3A1, POSTN, FN1, DCN, LUM]
+    hypoxia: [VEGFA, HIF1A, SLC2A1, CA9, PGK1]
+    hormone_axis: [AGT, AGTR1, ACE, ENPEP, NPPA, NPPB, NPPC, NPR1, NPR2, NPR3, CORIN, MME, EDN1, EDNRA, EDNRB, ADM,
+                   CALCRL, RAMP2, RAMP3, IGF1, FSTL1, HDC, HRH1]
+    vascular_drug_target: [SCN5A, ADRB1, CACNA1C, CACNA1D, ADRA1A, ADRA1B, ADRA1D, AGTR1, ATP1A2, PDE5A, ABCC9,
+                           KCNJ8, CACNA1G, EDNRA, EDNRB]
+    smooth_muscle_ACTA2: [ACTA2, MYH11, TAGLN, CNN1]
+    celltype_marker: [TNNT2, RYR2, MYH7, PECAM1, VWF, DCN, PDGFRA, COL1A1, RGS5, PDGFRB, ACTA2, MYH11, CD163, C1QA,
+                      LYVE1, NRXN1, PLP1, GPAM, MSLN, WT1, NPR3, SEMA3G]
+
+# ED6 f: whole section + 340 um vascular detail
+ed6f:
+  slide: VS_CA_H0054LV_henricke_endo
+  zoom_centre_um: [3194.0, 2767.0]
+  zoom_size_um: 340.0
+  raster_um: 4.0
+
+# Fig 1 j: four 92 um H&E + FICTURE fields on H0054 endo, located by matching the 4 gallery crops
+# ({inputs}/cardiomyocyte/fig1j_gallery/<name>_hires.png) against the registered H&E
+# (scripts/cardiomyocyte/fig1j_locate.py) and fixed here.
+fig1j:
+  slide: VS_CA_H0054LV_henricke_endo
+  base: CA_H0054LV_henricke_endo
+  size_um: 92.0
+  um_per_px: 0.25
+  tiles:          # gallery crops (box in the gallery page)
+    Mast_cells: {box: [18, 142, 885, 1006], label: Mast cells, target: Mast cells}
+    Dendritic_cells: {box: [18, 142, 882, 1006], label: Dendritic cells, target: Dendritic cells}
+    Neural_Cells: {box: [18, 1026, 882, 1889], label: Neural cells, target: Neural Cells}
+    Pericytes: {box: [1934, 1026, 2801, 1889], label: "Pericytes\n& Capillaries", target: Pericytes}
+  # located by fig1j_locate.py (results/cardiomyocyte/fig1j/locate.json): NCC of the gallery crop
+  # against the registered H&E at 1 um/px; orientation and scale 1.0 as the gallery; runner-up peak in brackets
+  centres_um:
+    Mast_cells: [2583.6, 1998.0]        # NCC 0.964 (0.500)
+    Dendritic_cells: [4187.6, 4454.0]   # NCC 0.887 (0.370)
+    Neural_Cells: [3334.6, 5510.0]      # NCC 0.877 (0.573)
+    Pericytes: [6064.6, 3827.0]         # NCC 0.956 (0.767)
+
+# ED6 e: concordance definition
+ed6e:
+  marker_top_n: 10            # atlas Level-3 markers per type: top N by log2(type mean / max other type mean)
+  marker_min_mean: 0.1        # ... among genes with type mean normcount >= this
+  pseudocount: 0.01
+
+# ED6 d: marker genes per Level-3 label, in the order of the rows (labels by their short name)
+ed6d:
+  chunk: 500000               # 2 um bins read at a time
+  markers:
+    Adipocytes: [GPAM, FASN]
+    Arterial EC: [GJA5, SEMA3G]
+    Atrial CM: [NPPA, MYL7, MYL4]
+    B cells: [CD79B]
+    Capillary EC: [RGCC, CA4, GPIHBP1]
+    Dendritic: [CLEC10A]
+    Endocardial EC: [NPR3]
+    Epicardium: [WT1]
+    Fibroblasts: [DCN, PDGFRA]
+    Lymphatic EC: [PROX1, LYVE1, PDPN]
+    Macrophages: [CD163, C1QA]
+    Mast cells: [KIT, IL18R1, CPA3]
+    Monocytes: [VCAN]
+    NK cells: [NKG7, KLRD1]
+    Neural: [NRXN1, NRXN3, CDH19]
+    Pericytes: [KCNJ8, ABCC9, RGS5]
+    Plasma: [XBP1]
+    T cells: [CD3E, IL7R]
+    VSMC: [MYH11, ACTA2, TAGLN]
+    Venous EC: [ACKR1, POSTN, PLVAP]
+    Ventricular CM: [MYH7, MYL2, FHL2]
+
+# Short names of the Level-3 types in ED6 d, e
+short_names:
+  Ventricular Cardiomyocytes: Ventricular CM
+  Atrial Cardiomyocytes: Atrial CM
+  Vascular Smooth Muscle cells: VSMC
+  Arterial Endothelial cells: Arterial EC
+  Capillary Endothelial cells: Capillary EC
+  Venous Endothelial cells: Venous EC
+  Endocardial Endothelial Cells: Endocardial EC
+  Lymphatic Endothelial Cells: Lymphatic EC
+  Lymphoid Cells (Proliferating): Lymphoid (prolif.)
+  Neural Cells: Neural
+  Plasma Cells: Plasma
+  Dendritic cells: Dendritic

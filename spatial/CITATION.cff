@@ -1,0 +1,8 @@
+cff-version: 1.2.0
+message: "If you use this code, please cite it as below."
+title: "hhca-analyses: spatial and donor-level analyses of the Human Heart Cell Atlas"
+type: software
+authors:
+  - family-names: Shulman
+    given-names: Maiia
+license: MIT

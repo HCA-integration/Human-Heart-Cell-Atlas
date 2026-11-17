@@ -1,0 +1,67 @@
+# Settings shared by the atlas-level analyses: atlas file and annotation levels, donor map, adult age range and
+# score thresholds, as used by scripts/atlas/ and the atlas figure panels.
+
+# Data roots (set for your machine with tools/set_roots.py).
+roots:
+  atlas: /path/to/atlas
+  results: results        # everything the workflow writes
+
+atlas:
+  h5ad: final_cleaned_hhca_annotated.h5ad
+  levels:
+    L2: Final Level 2_harmonized
+    L3: Final Level 3_harmonized
+    L4: Final Level 4_harmonized
+  stream_chunk: 20000
+
+donors:
+  map: resources/atlas/donor_map.csv   # 291 atlas donor ids -> 280 donors (11 donors released twice)
+  adult_age: [20, 89]
+
+donor_scores:
+  genesets: resources/atlas/ALL_genesets.json
+  min_nuclei: 10          # Fig 2 j-l
+  age_bands: [[20, 40], [40, 55], [55, 70], [70, 90]]   # Fig 2 k, upper end excluded
+  min_band_donors: 3      # donors of each sex needed to compare the sexes within a band
+  # gene set, annotation level and cell type of the scores of Fig 2 j-l, with the titles of the panels
+  panels:
+    serotonin:
+      gene_set: "HRECV::serotonin"
+      level: L4
+      cell_type: Endocardial Endothelial Cells - NRG1+
+      title: Endocardial serotonin reception (NRG1+)
+      title_age: Endocardial serotonin reception across age
+      jitter_seed: 23
+    beta_adrenergic:
+      gene_set: "AXIS::AXIS:beta-adrenergic (ADRB1/2)"
+      level: L3
+      cell_type: Arterial Endothelial cells
+      title: 'Arterial $\beta$-adrenergic (ADRB1/2) target'
+      jitter_seed: 11
+
+cytokine:
+  programs: resources/atlas/cytokine_programs.json
+  level: Final Level 3_harmonized
+  min_cells: 20
+  min_donors: 8
+  min_programme_genes: 5
+  # atlas immune types that are scored (the dictionary is PBMC-derived)
+  cell_types: [T cells, NK cells, B cells, Plasma Cells, Monocytes, Macrophages, Dendritic cells, ILC]
+  age_cell_types: [Macrophages, Monocytes, Dendritic cells, T cells, NK cells]   # Fig 5 m
+  alpha: 0.05
+  # Fig 5 n: LOESS of the z-scored scores over age, evaluated on `age_grid` (from, to, points)
+  trajectories:
+    cell_type: Macrophages
+    age_grid: [24, 82, 60]
+    frac: 0.8
+    n_boot: 200
+    seed: 100
+
+# Donors released twice (scripts/atlas/find_duplicate_donors.py)
+duplicate_donors:
+  level: Final Level 2_harmonized
+  min_nuclei: 50          # nuclei a donor needs in a cell type for that type to count
+  n_top: 2000             # genes with the largest residual variance
+  z_min: 5.0              # smallest z-score of a called pair
+  sex_genes: [XIST, TSIX, RPS4Y1, DDX3Y, UTY, KDM5D, USP9Y, EIF1AY, ZFY, NLGN4Y, TXLNGY, PRKY, TTTY14, TTTY15,
+              LINC00278, RPS4Y2]

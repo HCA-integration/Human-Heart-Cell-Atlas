@@ -1,0 +1,9 @@
+# Data roots used in config/*.yaml and workflow/hpc/. Copy this file, fill in your own paths and run
+#   python tools/set_roots.py --roots my_roots.yaml
+# to point the configs and SLURM scripts at them (preview with --dry-run).
+
+inputs: /path/to/hhca_inputs            # staged inputs: Visium, Xenium, H&E images, proteomics tables
+visium_hd: /path/to/visium_hd           # Visium HD project folder: Space Ranger outputs, registered H&E
+atlas: /path/to/atlas                   # folder with the HHCA snRNA atlas h5ad
+precomputed: /path/to/hhca_precomputed  # precomputed tables: Level-4 atlas profile, benchmark per-spot outputs
+scratch: /path/to/scratch               # downloaded public dictionaries (huCIRA)

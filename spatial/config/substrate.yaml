@@ -1,0 +1,114 @@
+# Pipeline `substrate`, FICTURE part: atlas-guided FICTURE decode of the 11 Visium HD left-ventricle sections
+# at 2 um with a fixed Level-3 model, certainty score, per-type thresholds, 2 um and 8 um h5ads.
+# Read by workflow/hpc/substrate_*.sbatch through scripts/substrate/config_get.py; HHCA_<ROOT> environment
+# variables override the roots.
+
+roots:
+  # 8 Berlin slides: Space Ranger 3.1.2 outputs
+  spaceranger_berlin: /path/to/visium_hd/Spaceranger312sturm
+  # 3 AH slides: square_002um written from the Space Ranger feature_slice.h5
+  # (scripts/substrate/regen_002um_from_feature_slice.py, workflow/hpc/substrate_regen_ah.sbatch)
+  spaceranger_ah: /path/to/hhca_inputs/Spaceranger312sturm
+  # square_008um of the 8 Berlin slides (count matrix of the 8 um h5ads)
+  spaceranger_008um: /path/to/hhca_inputs/Spaceranger312sturm
+  atlas_h5ad: /path/to/atlas/final_cleaned_hhca_annotated.h5ad
+  # midground / adaptive / adaptive_res FICTURE decodes of the 8 Berlin slides (<slide>/<variant>/output/),
+  # computed outside this pipeline: the certainty score uses them to choose its threshold (same call across
+  # decodes) and to flag bins whose call changes in the refit decode
+  alt_decodes: /path/to/hhca_inputs/reference_substrate/scanpy_analysis/ficture/fullslide_2um_L3
+  results: results/substrate
+
+# Gene set = non-mitochondrial genes with >= 1 UMI in one 800 x 800 um crop of BO_HDZ
+geneset:
+  slide: VS_BO_HDZ150319_34_myo
+  crop_um: [5115, 5915, 5810, 6610]   # X0 X1 Y0 Y1
+
+# Atlas gene x factor model: X (log1p-normalised counts) -> CP10k -> mean per type; Final Level 3_harmonized
+# without Unassigned (23 factors).
+model:
+  levels: {L4: Final Level 4_harmonized, L3: Final Level 3_harmonized}
+  chunk: 20000
+
+# FICTURE options, as set in scripts/substrate/run_ficture_decode.sh and run_ficture_decode_lowmem.sh
+ficture:
+  minibatch: --mu_scale 1.0 --batch_size 500 --batch_buff 30 --major_axis Y
+  transform: --key Count --major_axis Y --hex_width 12 --n_move 3 --min_ct_per_unit 20 --mu_scale 1.0 --precision 2
+  decode: --anchor_in_um --neighbor_radius 5.0 --mu_scale 1.0 --key Count --precision 0.1 --lite_topk_output_pixel 5 --lite_topk_output_anchor 5
+  # locale of the minibatch sort (LC_ALL)
+  sort_locale: C
+
+# Per slide: input builder (stock = run_ficture_decode.sh, lowmem = run_ficture_decode_lowmem.sh), decode
+# thread count and make_spatial_minibatch seed. FICTURE seeds the minibatch draw from the clock unless --seed
+# is given, and the decode depends on the draw and on --thread (pixels of other minibatches read in the same
+# chunk enter each minibatch's neighbourhood), so both are fixed here.
+slides:
+  VS_BO_HDZ150319_34_myo:      {site: berlin, builder: stock,  thread: 4, seed: "1780523215.140463",  region: myo}
+  VS_BO_2024BH-008_myo:        {site: berlin, builder: stock,  thread: 6, seed: "1781015243.482629",  region: myo}
+  VS_CA_H0054LV_henricke_endo: {site: berlin, builder: stock,  thread: 6, seed: "1781077932.670499",  region: endo}
+  VS_CA_H0054LV_henricke_epi:  {site: berlin, builder: stock,  thread: 6, seed: "1781041644.8252501", region: epi}
+  VS_CA_H0054LV_henricke_myo:  {site: berlin, builder: stock,  thread: 6, seed: "1781035757.747464",  region: myo}
+  VS_CA_H0063LV_henricke_endo: {site: berlin, builder: stock,  thread: 6, seed: "1781120998.2821918", region: endo}
+  VS_CA_H0063LV_henricke_epi:  {site: berlin, builder: stock,  thread: 6, seed: "1781098162.061379",  region: epi}
+  VS_CA_H0063LV_henricke_myo:  {site: berlin, builder: stock,  thread: 6, seed: "1781107764.532612",  region: myo}
+  VS_AH9_LV_FW_epi:            {site: ah,     builder: lowmem, thread: 2, seed: "1781374728.752692",  region: epi}
+  VS_AH10_LV_mid_endo:         {site: ah,     builder: lowmem, thread: 2, seed: "1781383260.368188",  region: endo}
+  VS_AH10_LV_mid_epi:          {site: ah,     builder: lowmem, thread: 2, seed: "1781388452.576559",  region: epi}
+
+# Certainty score. The slides are pooled in this order, which fixes the random sample (seed 7) behind the
+# quantiles and the threshold.
+certainty:
+  slides: [VS_BO_HDZ150319_34_myo, VS_BO_2024BH-008_myo, VS_CA_H0054LV_henricke_epi, VS_CA_H0054LV_henricke_myo,
+           VS_CA_H0054LV_henricke_endo, VS_CA_H0063LV_henricke_epi, VS_CA_H0063LV_henricke_myo, VS_CA_H0063LV_henricke_endo]
+  chunksize: 700000
+  # the threshold is chosen with the `midground` and `adaptive` decodes (roots.alt_decodes); without them it
+  # is fallback_threshold
+  fallback_threshold: 0.37
+  # weights of the four components: posterior margin, local depth, marker share, spatial agreement
+  weights: {posterior: 0.15, depth: 0.35, marker: 0.30, spatial: 0.20}
+  # marker genes per type from the model: enrichment over the mean of the other types, expression above this
+  # quantile of the type's profile, the top_n by log2(enrichment) * log1p(expression)
+  markers: {top_n: 24, min_enrichment: 1.5, expression_quantile: 0.70}
+  # pooled sample: rows per slide, seed, and the quantiles of each component that are scaled to 0 and 1
+  sample_per_slide: 180000
+  sampling_seed: 7
+  quantiles: [0.05, 0.95]
+  # threshold = lowest score whose precision reaches target_precision while keeping at least min_coverage of
+  # the rows; the report lists the operating points at these precisions
+  target_precision: 0.99
+  min_coverage: 0.02
+  operating_points: [0.99, 0.995, 0.999]
+
+# Per-type thresholds (fit_type_thresholds.py, assign_with_thresholds.py)
+tau:
+  global_tau: 0.37       # the single threshold they start from
+  sample_cap: 250000     # rows sampled per type and slide
+  sampling_seed: 0
+  p_floor: 0.001         # lowest posterior at which one of the top-5 factors is a candidate
+  rare_types: [B cells, T cells, NK cells, ILC, Mast cells, Plasma Cells, Dendritic cells, Monocytes,
+               "Lymphoid Cells (Proliferating)"]
+
+# Outputs of this pipeline and the Space Ranger folders of the Berlin slides, as read by
+# notebooks/01_visiumhd_cell_typing.ipynb ({slide} = slide id)
+paths:
+  model: "{results}/model/atlas_L3_pseudobulk.tsv"
+  factor_order: "{results}/model/atlas_L3_factor_order.json"
+  nuclei: "{results}/model/tables/atlas_L3_ncells.csv"
+  decode: "{results}/decode/{slide}/output/atlas_L3.decode.prj_12.r_4.0_5.0.pixel.tsv.gz"
+  inputs: "{results}/decode/{slide}/inputs"
+  checkpoint: "{results}/certainty/checkpoints/{slide}.features.npz"
+  certainty_tables: "{results}/certainty/tables"
+  tau_tables: "{results}/tau/tables"
+  h5ad_2um: "{results}/h5ad_2um/{slide}.h5ad"
+  h5ad_8um: "{results}/h5ad_8um/{slide}.h5ad"
+  h5ad_2um_clean: "{results}/clean_h5ad/h5ad_2um_CMFLAG_clean/{slide}.h5ad"
+  h5ad_8um_clean: "{results}/clean_h5ad/h5ad_8um_CMFLAG_clean/{slide}.h5ad"
+  clean_summary: "{results}/clean_h5ad/summary/{slide}_summary.json"
+  flags: "{results}/cmflag/flags/{slide}_clean_bins.parquet"
+  registration: "{results}/cmflag/registration/{slide}_align_grids.npz"
+  square_002um: "{spaceranger_berlin}/{slide}_GRCh38-2020-A/outs/binned_outputs/square_002um"
+  square_008um: "{spaceranger_008um}/{slide}_GRCh38-2020-A/outs/binned_outputs/square_008um"
+
+# Fields shown in notebooks/01_visiumhd_cell_typing.ipynb (VS_CA_H0054LV_henricke_endo); the pipeline does not read them
+notebook:
+  vessel_field: {centre_um: [3194.0, 2767.0], side_um: 340.0}   # field around a vessel: score components and H&E
+  tile_um: 150.0     # side of the H&E fields of the clean-up, and of the tiles searched for the most flagged bins

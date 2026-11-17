@@ -1,0 +1,24 @@
+# Atlas Final Level 3 immune types -> huCIRA human cytokine dictionary cell types, for
+# scripts/atlas/build_cytokine_programs.py (order as in hucira_celltypes_used of cytokine_program_meta.csv).
+# The dictionary is built from PBMCs: it has no macrophages, so the
+# atlas macrophages take the monocyte programmes ("nearest_myeloid" proxy). Mast cells and proliferating
+# lymphoid cells have no dictionary counterpart.
+programs:
+  CD4 T cells: [CD4_T_cell, CD4_Naive_T_cell, CD4_Memory_T_cell]
+  CD8 T cells: [CD8_T_cell, CD8_Naive_T_cell, CD8_Memory_T_cell]
+  Tregs: [Treg]
+  T cells: [CD4_T_cell, CD4_Naive_T_cell, CD4_Memory_T_cell, CD8_T_cell, CD8_Naive_T_cell, CD8_Memory_T_cell, Treg, MAIT]
+  NK cells: [NK, NK_CD56hi, NK_CD56low]
+  ILC: [ILC]
+  B cells: [B_cell, Naive_B_cell, Intermediate_B_cell]
+  Plasma Cells: [Plasmablast]
+  Monocytes: [CD14_Mono, CD16_Mono, Mono]
+  Macrophages: [CD14_Mono, CD16_Mono, Mono]
+  Dendritic cells: [cDC, pDC]
+nearest_myeloid: [Macrophages]
+unmatched: [Mast cells, Lymphoid Cells (Proliferating)]
+# the curated 24-cytokine subset (human_cytokine_dict_curated.csv): a hand-picked panel of well-characterised
+# cytokines, kept here as data (no rule in the huCIRA tables, e.g. functional classes, families or CIP lists,
+# gives this choice).
+cytokines: [GM-CSF, IFN-alpha1, IFN-beta, IFN-gamma, IFN-lambda1, IL-1-alpha, IL-1-beta, IL-10, IL-12, IL-13,
+            IL-15, IL-17A, IL-18, IL-2, IL-21, IL-4, IL-6, IL-8, M-CSF, OSM, TGF-beta1, TNF-alpha, TRAIL, VEGF]

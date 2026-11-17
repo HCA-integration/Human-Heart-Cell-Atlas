@@ -1,0 +1,20 @@
+# Pipeline `cardiomyocyte` (Fig 1 j, Fig 3 d-l, ED6 d-f): Python 3.11.15, the same pins as envs/vascular.yml
+# plus openpyxl for the DVP tables.
+name: hhca-cardiomyocyte
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  - python=3.11
+  - numpy=2.4.6
+  - scipy=1.17.1
+  - pandas=2.3.3
+  - pyarrow=24.0.0
+  - statsmodels=0.14.6
+  - anndata=0.12.16
+  - h5py=3.16.0=nompi*
+  - matplotlib-base=3.10.9
+  - tifffile=2026.3.3
+  - pillow=12.2.0
+  - pyyaml=6.0.3
+  - openpyxl=3.1.5
