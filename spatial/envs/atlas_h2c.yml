@@ -1,0 +1,94 @@
+# hormone2cell steps of pipeline `atlas` (Fig 2 h-i, Fig 4 l) and the resource builders.
+# Python 3.12.9; every package installed from pinned PyPI wheels (rpy2, milopy, igraph, leidenalg and imaging
+# extras are not needed). Build with PYTHONNOUSERSITE=1 (the sbatch scripts set it): otherwise pip treats packages
+# in ~/.local as installed and leaves them out of the env.
+#
+# hormone2cell 0.1.1 = PyPI wheel sha256 4c37503f38edaba3039f06243767913caad3d10efb5afeac9f1310f1d76ab5aa
+#   = GitHub Teichlab/hormone2cell commit 88175d9b2082fc517ba7bd64add451b7c9b54b96. It ships the
+#   Hormone-Receptor Reference Database v2.0.0 pickles:
+#     hormone_producing_definition_v2.0.0.pkl  sha256 e50d3575ebd804a5bf6590ca2891e642e3ebc8e9b51d55f38337e5e1877cd2a7
+#     hormone_receptor_definition_v2.0.0.pkl   sha256 9a37a99076bc05652adae691f2e45840a02023344e2e5439e42113cde9df930f
+#   workflow/hpc/atlas_hormones.sbatch checks these hashes before running.
+# drug2cell 0.1.2 is installed only for its bundled ChEMBL dictionary (drug-target_dicts.pkl,
+#   sha256 4a53e3e1dec08b339fafd5b055f2b51f8e4b201d153efa94153f97cc47bc9158); it is never imported.
+name: hhca-atlas-h2c
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  - python=3.12.9
+  - pip
+  - pip:
+      - numpy==2.4.6
+      - scipy==1.17.1
+      - pandas==2.3.3
+      - h5py==3.16.0
+      - statsmodels==0.14.6
+      - anndata==0.12.16
+      - scanpy==1.11.5
+      - matplotlib==3.10.9
+      - pyyaml==6.0.3
+      # dependencies of the above
+      - python-dateutil==2.9.0.post0
+      - pytz==2026.2
+      - tzdata==2026.2
+      - patsy==1.0.2
+      - packaging==26.2
+      - numba==0.65.1
+      - llvmlite==0.47.0
+      - scikit-learn==1.9.0
+      - joblib==1.5.3
+      - threadpoolctl==3.6.0
+      - networkx==3.6.1
+      - natsort==8.4.0
+      - tqdm==4.68.2
+      - umap-learn==0.5.12
+      - pynndescent==0.6.0
+      - seaborn==0.13.2
+      - session-info2==0.4.1
+      - legacy-api-wrap==1.5
+      - scverse-misc==0.0.8
+      - array-api-compat==1.15.0
+      - donfig==0.8.1.post1
+      - zarr==3.1.5
+      - numcodecs==0.16.5
+      - google-crc32c==1.8.0
+      - narwhals==2.22.1
+      - contourpy==1.3.3
+      - cycler==0.12.1
+      - fonttools==4.63.0
+      - kiwisolver==1.5.0
+      - pillow==12.2.0
+      - pyparsing==3.3.2
+      - typing-extensions==4.15.0
+      # hormone2cell and its dependencies; drug2cell only for its ChEMBL pickle
+      - matplotlib-venn==1.1.2
+      - blitzgsea==1.3.54
+      - hormone2cell==0.1.1
+      - drug2cell==0.1.2
+      # Jupyter kernel: notebooks/07_atlas_donors.ipynb calls hormone2cell and runs in this environment
+      - ipykernel==7.4.0
+      - ipython==9.18.1
+      - ipython-pygments-lexers==1.1.1
+      - jupyter-client==8.10.0
+      - jupyter-core==5.9.1
+      - matplotlib-inline==0.2.2
+      - comm==0.2.3
+      - debugpy==1.8.22
+      - nest-asyncio2==1.7.4
+      - psutil==7.2.2
+      - pyzmq==27.3.0
+      - tornado==6.6.1
+      - traitlets==5.16.1
+      - platformdirs==4.14.5
+      - pygments==2.21.0
+      - prompt-toolkit==3.0.53
+      - wcwidth==0.9.4
+      - jedi==0.20.1
+      - parso==0.8.7
+      - pexpect==4.9.0
+      - ptyprocess==0.7.0
+      - stack-data==0.6.3
+      - asttokens==3.0.2
+      - executing==2.3.0
+      - pure-eval==0.2.4

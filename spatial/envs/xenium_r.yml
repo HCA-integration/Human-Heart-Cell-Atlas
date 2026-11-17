@@ -1,0 +1,11 @@
+# Seurat -> Matrix Market extraction of the GSE290577 processed object (scripts/xenium/extract_mtx.R):
+# conda-forge builds of R and Seurat that read the Seurat v5 object.
+name: hhca-xenium-r
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  - r-base=4.5
+  - r-seurat=5.4.0
+  - r-seuratobject=5.4.0
+  - r-matrix

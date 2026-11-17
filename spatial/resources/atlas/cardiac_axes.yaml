@@ -1,0 +1,44 @@
+# The 12 hand-curated cardiac drug-mechanism axes of ALL_genesets.json ("AXIS::<name>"), read by
+# scripts/atlas/build_genesets.py. Keys are the gene-set labels; gene order is kept in the gene sets.
+# Definitions are plain descriptions of what each gene list contains.
+"AXIS:beta-adrenergic (ADRB1/2)":
+  genes: [ADRB1, ADRB2, ADRB3]
+  definition: beta-adrenergic receptors (beta-blocker and beta-agonist targets); the list includes ADRB3
+    although the label names ADRB1/2 only
+"AXIS:alpha-adrenergic (ADRA1)":
+  genes: [ADRA1A, ADRA1B, ADRA1D]
+  definition: alpha-1 adrenergic receptors (alpha-1 blocker targets)
+"AXIS:RAAS (ACE/AGTR1/REN)":
+  genes: [ACE, AGTR1, REN, AGT, ACE2, AGTR2]
+  definition: renin-angiotensin system enzymes, substrate and angiotensin receptors (ACE inhibitor,
+    angiotensin receptor blocker and renin inhibitor targets)
+"AXIS:Ca-channel-blocker (CACNA1C)":
+  genes: [CACNA1C, CACNA1D, CACNB2, CACNA2D1]
+  definition: L-type voltage-gated calcium channel subunits (calcium channel blocker targets)
+"AXIS:antiarrhythmic Na/K (SCN5A)":
+  genes: [SCN5A, KCNH2, KCNQ1, KCNE1]
+  definition: cardiac sodium channel and repolarising potassium channel subunits (class I and class III
+    antiarrhythmic targets)
+"AXIS:HCN ivabradine (HCN4)":
+  genes: [HCN4, HCN1, HCN2]
+  definition: hyperpolarisation-activated cyclic nucleotide-gated channels (funny current; ivabradine target)
+"AXIS:endothelin (EDNRA/B)":
+  genes: [EDNRA, EDNRB]
+  definition: endothelin receptors A and B (endothelin receptor antagonist targets)
+"AXIS:SGLT2 (SLC5A2)":
+  genes: [SLC5A2, SLC5A1]
+  definition: sodium-glucose cotransporters 2 and 1 (gliflozin targets)
+"AXIS:mineralocorticoid/diuretic":
+  genes: [NR3C2, SCNN1A, SCNN1B, SCNN1G, SLC12A1, SLC12A3, ATP1A1]
+  definition: mineralocorticoid receptor, epithelial sodium channel subunits, loop- and thiazide-sensitive
+    cotransporters and the Na/K-ATPase alpha-1 subunit (mineralocorticoid antagonist and diuretic targets)
+"AXIS:Ca-handling RyR/SERCA":
+  genes: [RYR2, ATP2A2, PLN, CASQ2]
+  definition: sarcoplasmic-reticulum calcium release and re-uptake (ryanodine receptor 2, SERCA2a,
+    phospholamban, calsequestrin 2)
+"AXIS:PDE3 (milrinone)":
+  genes: [PDE3A, PDE3B]
+  definition: phosphodiesterase 3 (milrinone target)
+"AXIS:K-ATP (KCNJ11)":
+  genes: [KCNJ11, ABCC8, ABCC9, KCNJ8]
+  definition: ATP-sensitive potassium channel pore (Kir6.x) and sulfonylurea-receptor subunits

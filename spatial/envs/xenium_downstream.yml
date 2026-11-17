@@ -1,0 +1,17 @@
+# Rejection-cohort downstream analyses and figures (Fig 6, ED9, ED6 i-j).
+name: hhca-xenium-downstream
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  - python=3.11
+  - numpy=2.4.6
+  - pandas=2.3.3
+  - scipy=1.17.1
+  - scikit-learn=1.8.0
+  - statsmodels=0.14.6
+  - matplotlib=3.10.9
+  - anndata=0.12.16
+  - scanpy=1.11.5
+  - pyarrow
+  - pyyaml

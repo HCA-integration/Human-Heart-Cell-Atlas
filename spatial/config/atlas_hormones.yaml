@@ -1,0 +1,111 @@
+# Pipeline `atlas`: hormone2cell analyses and the builders of the curated resources.
+# These are the settings used by workflow/hpc/atlas_hormones.sbatch, workflow/hpc/atlas_resources.sbatch and the
+# scripts they call; the input paths are the defaults of the two jobs (HHCA_* variables override them).
+
+inputs:
+  atlas_h5ad: /path/to/atlas/final_cleaned_hhca_annotated.h5ad
+  # Level-4 atlas profile (14,016-gene FICTURE panel; mean CP10k per Final Level 4 type) and nuclei per type
+  l4_profile: /path/to/hhca_precomputed/scanpy_analysis/ficture/newatlas/output/atlas_v2_L4_pseudobulk.tsv
+  l4_ncells: /path/to/hhca_precomputed/scanpy_analysis/ficture/newatlas/tables/atlas_v2_L4_ncells.csv
+  # per-donor gene-set scores (workflow/hpc/atlas_scores.sbatch); only the donor sex and age are used here
+  donor_scores: results/atlas/per_donor_celltype_scores.npz
+  donor_map: resources/atlas/donor_map.csv       # 291 atlas donor ids -> 280 donors
+  # public huCIRA human cytokine dictionary: hucira 0.1.3 load_human_cytokine_dict() downloads
+  # https://cdn.parsebiosciences.com/gigalab/10m/DEGs.csv and re-saves it (reset index) as below
+  hucira_dict: /path/to/scratch/hucira_data/human_cytokine_dict.csv
+
+outputs:
+  root: results/atlas/hormones
+
+# hormone2cell, stratified by donor subgroup (scripts/atlas/hormone2cell_stratified.py)
+stratified:
+  block: 50000
+  layer: counts
+  level: Final Level 4_harmonized
+  checkpoint_every: 5
+  producer_assay: cell            # 14,016-gene panel, detection pass-through (Percentage 100)
+  receiver_assay: nucleus_only    # all atlas genes, real 5 % single-nucleus detection
+
+# Relevance gate (scripts/atlas/hormone_relevance_gate.py)
+relevance_gate:
+  quantile: 0.25                  # of the non-zero R = max(male, female) per panel
+  top_n: 22
+  force_include: ["Estradiol (from androgens)", "Estrogens (from androgens)"]
+
+# Significance table (scripts/atlas/hormone_sexdiff_significance.py)
+sexdiff:
+  min_cells: 10
+  min_per_group: 5
+  adult_min_age: 20
+  min_datasets: 3                 # datasets with both sexes needed to judge agreement
+  outline_test: ols_p             # dot outline = OLS score ~ C(sex) + age, p < 0.05
+
+# Vascular hormone relay (figures/Fig4/panel_l.py); `hormones` = the 12 hormones chosen for the vascular relay
+relay:
+  tiers: ["1", "2", "3"]
+  top_n_producers: 2
+  top_n_receivers: 6
+  require_producer: false
+  receiver_families: [Endothelial, Pericyte, VSMC]
+  hormones: [igf2, endothelin_2, sclerostin, endothelin_1, adm, igf1, angiotensinogen, anp, vip,
+             adiponectin, chemerin, apelin]
+  display: {igf2: IGF-2, igf1: IGF-1, endothelin_1: Endothelin 1, endothelin_2: Endothelin 2,
+            sclerostin: Sclerostin, adm: Adrenomedullin, angiotensinogen: Angiotensinogen, anp: ANP, vip: VIP,
+            adiponectin: Adiponectin, chemerin: Chemerin, apelin: Apelin}
+
+# The four cell systems of Fig 2 h-i: patterns on the Level-4 type names (relevance gate) and the Level-2 types
+# over which the per-donor scores are averaged
+cell_systems:
+  vascular: ['Endothelial', '\bPericyte', '\bVSMC', 'Smooth Muscle']
+  macrophage: ['Myeloid', 'Macrophage', 'Monocyte', '\bcDC\b', '\bpDC\b', 'Dendritic']
+  cardiomyocyte: ['Cardiomyocyte']
+  neural: ['Neural', '\bGlia\b', 'Schwann']
+system_level2:
+  vascular: [Vascular Endothelial Cells, Endocardial Endothelial Cells, Lymphatic Endothelial Cells, Mural Cells]
+  macrophage: [Myeloid Cells]
+  cardiomyocyte: [Ventricular Cardiomyocytes, Atrial Cardiomyocytes]
+  neural: [Neural Cells]
+
+# Per-donor expression of the hormone genes (scripts/atlas/lv_hormone_tensor.py)
+lv_expression:
+  level: Final Level 2_harmonized
+  tissue: Left Ventricle
+  layer: normcounts
+  block: 50000
+
+# Cell families of the Level-4 types, in the order of the relay columns; the first family with a matching pattern
+# wins (so "Lymphatic Endothelial" is Endothelial, not Immune)
+cell_families:
+  Endothelial: ['Endothelial']
+  Pericyte: ['\bPericyte']
+  VSMC: ['\bVSMC', 'Smooth Muscle']
+  Cardiomyocyte: ['Cardiomyocyte']
+  Fibroblast: ['Fibroblast']
+  Immune: ['Myeloid', 'Macrophage', 'Monocyte', '\bT Cells?\b', '\bB Cells?\b', '\bNK\b', 'Plasma', '\bMast\b',
+           'Dendritic', '\bcDC\b', '\bpDC\b', 'Granulocyte', 'Neutrophil', 'Lymphocyte', '\bILC\b']
+  Neural: ['Neural', '\bGlia\b', 'Schwann']
+  Adipocyte: ['Adipocyte']
+  Epicardium: ['Epicardium', 'Mesothel']
+
+# Hormones whose producing cell types are listed in producer_focus_axes.csv
+producer_focus: [estrogens, estradiol_17beta, androgens, endothelin_1, endothelins_all, adm, adm_all, histamine,
+                 pg_all, natriuretic_peptides_all, anp, bnp]
+
+# Resource builders
+genesets:
+  min_targets_present_in_json: 1  # drugs with >= 1 target in the atlas are written; the >= 3 gate
+                                  # (MIN_TARGETS_DRUG = 3) is applied when drug groups are analysed
+  cardiac_axes: resources/atlas/cardiac_axes.yaml
+cytokine_programs:
+  celltype_match: resources/atlas/hucira_celltype_match.yaml
+  up_log_fc: 0.5
+  up_adj_p: 0.05
+  top_n: 50
+  # The 24 cytokines are a hand-picked subset of the dictionary (resources/atlas/hucira_celltype_match.yaml).
+  # build_cytokine_programs.py applies the row filter; unlike hucira 0.1.3's loader it keeps well_biased rows
+  # and TGF-beta1 / IL-18 / C3a.
+  curated_filter: {adj_p_lt: 0.05, abs_log_fc_ge: 0.25, well_biased_rows: kept}   # 553,312 rows
+
+# Used by notebooks/07_atlas_donors.ipynb only
+notebook:
+  alpha: 0.05                     # p and q level counted in the sex-difference summary and drawn in the volcano plot

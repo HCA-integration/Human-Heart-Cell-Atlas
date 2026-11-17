@@ -1,0 +1,64 @@
+[build-system]
+build-backend = "hatchling.build"
+requires = [ "hatchling" ]
+
+[project]
+name = "hhca-analyses"
+version = "0.1.0"
+description = "Spatial and donor-level analyses of the Human Heart Cell Atlas"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [ { name = "Maiia Shulman" } ]
+requires-python = ">=3.9"
+# The analysis dependencies are pinned per pipeline in envs/; install this package with --no-deps.
+dependencies = [ ]
+
+[tool.hatch.build.targets.wheel]
+packages = [ "src/hhca" ]
+
+[tool.ruff]
+line-length = 120
+src = [ "src", "scripts/*", "scripts/*/*" ]
+target-version = "py39"
+extend-include = [ "*.ipynb" ]
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.ruff.lint]
+select = [
+  "B",    # flake8-bugbear
+  "BLE",  # flake8-blind-except
+  "C4",   # flake8-comprehensions
+  "D200", # pydocstyle, the layout rules only: docstrings are optional but look the same everywhere
+  "D201",
+  "D202",
+  "D204",
+  "D206",
+  "D207",
+  "D208",
+  "D209",
+  "D210",
+  "D211",
+  "D300",
+  "D301",
+  "D403",
+  "D419",
+  "E",    # pycodestyle errors
+  "F",    # pyflakes
+  "I",    # isort
+  "TID",  # flake8-tidy-imports
+  "UP",   # pyupgrade
+  "W",    # pycodestyle warnings
+]
+ignore = [
+  "B008", # function calls in argument defaults
+  "E731", # lambda assignments
+  "E741", # short names such as l, I, O
+]
+
+[tool.ruff.lint.isort]
+known-first-party = [ "hhca" ]
+
+[tool.ruff.lint.per-file-ignores]
+"notebooks/*" = [ "E402" ]

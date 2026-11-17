@@ -1,0 +1,25 @@
+# pipeline outputs, logs and job scratch
+results/
+logs/
+.tmp/
+
+# environments and tools built by workflow/hpc/env.sh
+.envs/
+.tools/
+
+# local copies of the data roots
+my_roots.yaml
+config/roots.*.yaml
+
+# Python and Jupyter
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# macOS
+.DS_Store
+._*
+
+# credentials
+.env
+*.netrc

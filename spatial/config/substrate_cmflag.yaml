@@ -1,0 +1,106 @@
+# Pipeline `substrate`, CMFLAG part: H&E registration and spillover flags (cardiomyocyte, VSMC, arterial and venous
+# EC) for all 11 Visium HD slides, on the FICTURE substrate of this repository
+# (results/substrate/{model,decode,certainty,tau,h5ad_2um}).
+# Read by scripts/substrate/cmflag/run_slide.py (workflow/hpc/substrate_cmflag_flags.sbatch). {placeholders} refer
+# to `roots`.
+
+roots:
+  heart: /path/to/visium_hd         # Visium HD project folder: Space Ranger outputs, registered H&E, vessel tables
+  inputs: /path/to/hhca_inputs      # H&E images and vessel tables of the remaining slides
+  results: results/substrate        # FICTURE outputs; CMFLAG outputs in cmflag/
+
+shared:
+  factor_order: "{results}/model/atlas_L3_factor_order.json"
+  quantiles: "{results}/certainty/tables/normalization_quantiles.json"   # certainty score
+  tau: "{results}/tau/tables/pertype_tau_recommended.json"               # per-type thresholds
+  gcert_dir: "{results}/certainty/checkpoints"                           # certainty score
+  cm_fit: "{heart}/scanpy_analysis/cm_bin_flagging/VS_BO_HDZ150319_34_myo_decay_fit.json"        # lambda_CM 4.849 um
+  vsmc_fit: "{heart}/scanpy_analysis/cm_bin_flagging/VS_BO_HDZ150319_34_myo_vsmc_decay_fit.json" # lambda_VSMC 20.056 um
+
+# Assignment behind the flags: the certainty score against the per-type thresholds, the rarest passing type of
+# the top-5 factors first. The thresholds of all types other than `unscaled` are multiplied by rare_tau_scale,
+# which keeps more vessel and immune bins assigned.
+assignment:
+  rare_tau_scale: 0.3
+  p_floor: 0.001
+  unscaled: [Ventricular Cardiomyocytes, Atrial Cardiomyocytes]
+
+# H&E whitespace of the microscopy images: grey above `grey`, or inside the image with eosin OD below
+# `eosin_od`; `lumen_grey` is the grey cut inside a vessel outline
+whitespace: {grey: 235.0, eosin_od: 0.008, lumen_grey: 220.0}
+# a bin whose haematoxylin OD lies more than this fraction of the way from the whitespace median to the tissue
+# median holds a nucleus and is never flagged
+nucleus_fraction: 0.35
+# a bin is flagged when the expected spillover makes up at least this share of its marker density
+min_spillover_share: 0.80
+
+# Marker genes counted per 2 um bin: of the four flagged types, and of the competing types that guard a bin
+# (ecg endothelial, vsg smooth muscle, cmg cardiomyocyte)
+markers:
+  cm: [TNNT2, MYH6, MYL7, ACTC1, MYH7, TNNI3]
+  vsmc: [MYH11, ACTA2, TAGLN, MYL9, CNN1, LMOD1]
+  art: [SEMA3G, GJA5, HEY1, EFNB2, PECAM1, CDH5]
+  ven: [ACKR1, NR2F2, VWF, PECAM1, CDH5]
+  ecg: [PECAM1, CDH5, VWF]
+  vsg: [MYH11, ACTA2, TAGLN]
+  cmg: [TNNT2, MYL7, ACTC1]
+
+# The four spillover flags: cell types a flag applies to, marker set compared with its decay into whitespace
+# (shared.cm_fit or shared.vsmc_fit) and the guard marker sets. Only these four flags remove bins.
+flags:
+  flag_cm_spillover: {types: [Ventricular Cardiomyocytes, Atrial Cardiomyocytes], markers: cm, guards: [ecg], decay: cm}
+  flag_vsmc_spillover: {types: [Vascular Smooth Muscle cells], markers: vsmc, guards: [ecg], decay: vsmc}
+  flag_spill_artEC: {types: [Arterial Endothelial cells], markers: art, guards: [cmg, vsg], decay: vsmc}
+  flag_spill_venEC: {types: [Venous Endothelial cells], markers: ven, guards: [cmg, vsg], decay: vsmc}
+
+# Output layout (under roots.results):
+#   cmflag/flags/<slide>_clean_bins.parquet, <slide>_counts.json   flags
+#   cmflag/registration/<slide>_align_grids.npz                    registration
+#   clean_h5ad/h5ad_{2um,8um}_CMFLAG_clean/<slide>.h5ad, clean_h5ad/summary/<slide>_summary.json
+#     (workflow/hpc/substrate_cmflag_clean.sbatch, from h5ad_2um/ and h5ad_8um/)
+
+berlin_defaults: &berlin
+  producer: cmflag_tif
+  decode: "{results}/decode/{slide}/output/atlas_L3.decode.prj_12.r_4.0_5.0.pixel.tsv.gz"
+  spaceranger: "{heart}/Spaceranger312sturm/{slide}_GRCh38-2020-A/outs"
+  tif: "{heart}/scanpy_analysis/ficture/fullslide_2um_L3/_mdc_he/{base}.tif"
+  structs: "{heart}/scanpy_analysis/vessel_pharmacology/checkpoints/{slide}_structs.csv"
+  cells: "{heart}/scanpy_analysis/vessel_pharmacology/checkpoints/{slide}_cells.parquet"
+
+ah_defaults: &ah
+  producer: cmflag_ah
+  h5ad: "{results}/h5ad_2um/{slide}.h5ad"
+  spaceranger: "{inputs}/Spaceranger312sturm/{slide}_GRCh38-2020-A/outs"     # square_002um written from feature_slice.h5
+  hires: "{inputs}/substrate_cmflag/hires/{slide}/tissue_hires_image.png"     # Space Ranger spatial/ hires image
+  structs: "{inputs}/substrate_cmflag/vessels/{slide}_structs.csv"            # AH vessel structure tables (ah_<slide>_*)
+  cells: "{inputs}/substrate_cmflag/vessels/{slide}_cells.parquet"
+
+slides:
+  VS_BO_2024BH-008_myo:        {<<: *berlin, base: BO_2024BH-008_myo}
+  VS_CA_H0054LV_henricke_endo: {<<: *berlin, base: CA_H0054LV_henricke_endo}
+  VS_CA_H0054LV_henricke_epi:  {<<: *berlin, base: CA_H0054LV_henricke_epi}
+  VS_CA_H0054LV_henricke_myo:  {<<: *berlin, base: CA_H0054LV_henricke_myo}
+  VS_CA_H0063LV_henricke_endo: {<<: *berlin, base: CA_H0063LV_henricke_endo}
+  VS_CA_H0063LV_henricke_epi:  {<<: *berlin, base: CA_H0063LV_henricke_epi}
+  VS_CA_H0063LV_henricke_myo:  {<<: *berlin, base: CA_H0063LV_henricke_myo}
+  VS_BO_HDZ150319_34_myo:
+    <<: *berlin
+    base: BO_HDZ150319_34_myo
+    # microscopy TIF and vessel tables of BO_HDZ are kept with the other inputs
+    tif: "{inputs}/substrate_cmflag/he/BO_HDZ150319_34_myo.tif"
+    structs: "{inputs}/substrate_cmflag/vessels/{slide}_structs.csv"
+    cells: "{inputs}/substrate_cmflag/vessels/{slide}_cells.parquet"
+  VS_AH10_LV_mid_endo:
+    <<: *ah
+    he_source: czi
+    czi: "{inputs}/substrate_cmflag/he/AH10_LV_mid_endo.czi"      # microscope file 2026_02_10__0074_X_ah10_endo_5.czi
+  VS_AH10_LV_mid_epi:
+    <<: *ah
+    he_source: czi
+    czi: "{inputs}/substrate_cmflag/he/AH10_LV_mid_epi.czi"       # microscope file 2026_02_10__0075_X_ah10_epi_6.czi
+  VS_AH9_LV_FW_epi:
+    <<: *ah
+    he_source: hires
+    # size of the microscope (full-resolution) image, from the header of ah9-lv-epi-slide1.ome.tiff (the file
+    # is truncated, its header is intact). The hires image, 6000 x 3944, has the same aspect ratio.
+    micro_dims: "53882,35418"
