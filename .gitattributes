@@ -9,4 +9,6 @@
 
 # binary files
 *.jpg binary
-*.png binary*.ipynb linguist-documentation
+*.png binary
+
+*.ipynb linguist-documentation
