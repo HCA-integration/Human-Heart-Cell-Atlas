@@ -1,0 +1,176 @@
+# Pipeline `xenium` downstream: rejection cohort (Fig 6 c-l, ED9 a-c, ED6 j) and healthy display (ED6 i).
+# Scripts: scripts/xenium/downstream/ (run order in scripts/xenium/downstream/run_downstream.sh).
+# Renderers: figures/Fig6/panel_*.py, figures/ED9/panel_*.py, figures/ED6/panel_{i,j}.py (read results/ only).
+# Paths: absolute = read-only public inputs; relative = inside the checkout.
+
+inputs:
+  metadata: /path/to/hhca_inputs/xenium/GSE290577/GSE290577_heart_spatial_metadata.txt.gz   # GEO clinical metadata
+  extracted: results/xenium/inputs/gse290577_aug2025/extracted        # counts.mtx genes.txt barcodes.txt obs.csv cells_geom.csv of
+                                                                      # GSE290577_heart_spatial.rds (Aug 2025; scripts/xenium/extract_mtx.R)
+  cytokine_programs: resources/atlas/cytokine_programs.json   # huCIRA programmes
+  rejection:
+    cellpin_labels: results/xenium/rejection/xenium_cellpin_labels.csv     # scripts/xenium/assemble_labels.py
+  healthy:
+    cellpin_labels: results/xenium/healthy/xenium_cellpin_labels.csv
+    counts_h5: /path/to/hhca_inputs/xenium/healthy_10x/cell_feature_matrix.h5    # 10x cell-feature matrix
+
+outputs:
+  root: results/xenium/downstream
+
+# ---------------------------------------------------------------------------------------------------------
+labels:
+  # lymphoid Level 4: 6 classes (CD4 T, CD8 T, NK, each +/- proliferating); no Treg (held-out F1 0)
+  lymphoid:
+    CD8 T cells: CD8 T
+    Proliferating CD8 T cells: prolif. CD8 T
+    CD4 T cells: CD4 T
+    Proliferating CD4 T cells: prolif. CD4 T
+    NK cells: NK
+    Proliferating NK cells: prolif. NK
+  tcell: [CD4 T, prolif. CD4 T, CD8 T, prolif. CD8 T]
+  nk: [NK, prolif. NK]
+  exclude_l3: [ILC]                    # ILC excluded from the immune set and downstream (held-out F1 0.33 < 0.5)
+  pool_cardiomyocytes: [Atrial Cardiomyocytes, Ventricular Cardiomyocytes]   # -> "Cardiomyocytes"
+  # rejection-cohort rules
+  rejection_rule: combine              # "mixed" when a biopsy's cores show both cellular and antibody rejection
+                                       # (a mixed core counts as both); no core-order dependence
+  grade_rule: clinical                 # GEO clinical biopsy-level grade (patient_cellular_grading)
+
+# ---------------------------------------------------------------------------------------------------------
+# cell classes of the analyses: the lymphoid compartment by its Level-4 class (labels.lymphoid), every other cell
+# by the class of its Level-3 type listed here (labels.exclude_l3 is left out everywhere)
+classes:
+  immune:                              # cytokine programmes per cell type, T-cell fraction (with labels.tcell)
+    Macrophages: Macrophages
+    Monocytes: Monocytes
+    Dendritic cells: Dendritic cells
+    B cells: B cells
+    Plasma Cells: Plasma cells
+    Mast cells: Mast cells
+  cd4_pool: [CD4 T, prolif. CD4 T]     # the CD4 compartment pooled for the Fig 6 j test
+  composition:                         # immune composition of a core (Fig 6 d, ED9 a)
+    Macrophages: Macrophages
+    Monocytes: Monocytes
+    Dendritic cells: Dendritic cells
+    B cells: B cells
+    Plasma Cells: Plasma Cells
+    Mast cells: Other
+  composition_order: [CD4 T, prolif. CD4 T, CD8 T, prolif. CD8 T, Macrophages, Monocytes, NK, prolif. NK,
+                      Dendritic cells, B cells, Plasma Cells, Other]
+  drug_targets:                        # columns of Fig 6 k
+    Macrophages: Macrophages
+    Monocytes: Monocytes
+    Dendritic cells: Dendritic cells
+    B cells: B cells
+    Plasma Cells: Plasma cells
+    Mast cells: Mast cells
+    Arterial Endothelial cells: Endothelial
+    Capillary Endothelial cells: Endothelial
+    Venous Endothelial cells: Endothelial
+    Endocardial Endothelial Cells: Endothelial
+    Lymphatic Endothelial Cells: Endothelial
+    Fibroblasts: Fibroblasts
+    Cardiomyocytes: Cardiomyocytes
+    Pericytes: Mural
+    Vascular Smooth Muscle cells: Mural
+  drug_target_order: [CD8 T, prolif. CD8 T, CD4 T, prolif. CD4 T, NK, prolif. NK, Macrophages, Monocytes,
+                      Dendritic cells, B cells, Plasma cells, Mast cells, Endothelial, Fibroblasts, Mural,
+                      Cardiomyocytes]
+  slide_immune: [Macrophages, Monocytes, Dendritic cells, B cells, Plasma Cells, Mast cells]   # Fig 6 c, next to
+                                                                                               # the lymphoid classes
+  lineage:                             # immune lineages of ED6 j
+    T / NK: [T cells, NK cells]
+    B / Plasma: [B cells, Plasma Cells]
+    Macrophage: [Macrophages]
+    Monocyte / DC: [Monocytes, Dendritic cells]
+    Mast: [Mast cells]
+    Lymphoid (prolif.): [Lymphoid Cells (Proliferating)]
+
+# ---------------------------------------------------------------------------------------------------------
+params:
+  dbscan: {eps_um: 30.0, min_samples: 5}          # immune foci (core_features.py, core_geometry.py)
+  cytokine:
+    programmes: [IL-15, IL-2, IFN-beta, IL-1-beta, IFN-gamma, IL-4, IL-10, IL-12, IL-21, GM-CSF, IL-1-alpha,
+                 IFN-alpha1, IL-13, M-CSF, IL-6, OSM, TNF-alpha, IL-18]   # keys of the programme JSON
+    min_panel_genes: 3                            # 18 programmes with >= 3 panel genes
+    ctrl_size: 50
+    random_state: 0
+  celltype_cytokine:                              # celltype_cytokine_scores.py
+    method: mean log1p CP10k over the programme's panel genes per cell, mean over cells per core x cell type
+    min_cells: 10                                 # core x cell-type groups with >= 10 cells
+    min_panel_genes: 5                            # programmes with >= 5 panel genes (17 of 18; IL-10 has 4)
+  fig6d_min_immune: 25                            # cores with >= 25 immune cells in the composition track
+  permutations: 5000                              # patient-level permutations of the Fig 6 e and 6 i tests
+  outcome_min_biopsies: 3                         # resolved vs persistence: biopsies per outcome needed for a test
+  drugs:                                          # Fig 6 k / 6 l: curated drug -> target genes, score_genes, z per drug across cell types
+    ATG (anti-thymocyte): [CD2, CD3D, CD3E, CD247, CD5, CD4, CD8A, CD27, CD28]
+    Basiliximab (anti-CD25): [IL2RA]
+    Belatacept (CD80/86): [CD80, CD86]
+    Iscalimab (anti-CD40): [CD40]
+    Rituximab (anti-CD20): [MS4A1]
+    Bortezomib (proteasome): [PSMB8]
+    Tacrolimus (FKBP1A): [FKBP1A]
+    Sirolimus (mTOR): [MTOR, FKBP1A]
+  atg_score: score_genes over the ATG set, all cells, per-core mean   # Fig 6 l
+  atg_drug: ATG (anti-thymocyte)                  # the drug of params.drugs behind the per-core score of Fig 6 l
+
+# ---------------------------------------------------------------------------------------------------------
+figures:
+  fig6c_zoom_core: Patient_54_1       # Fig 6 c zoom: highest grade, most immune cells on the larger slide
+  fig6i_programme: IL-1-beta          # Fig 6 i
+  ed6j_cores: [Patient_12_2, Patient_54_1]
+  ed9b_programmes: [IL-21, IL-18, IL-6, IL-1-alpha, OSM, IL-10, IFN-alpha1, IL-4]
+  ed9c_programmes: [IL-15, IL-2, TNF-alpha, GM-CSF, IL-12, M-CSF, IFN-gamma, IL-13]
+
+ed6i:
+  # cardiomyocytes pooled; endothelial subtypes only for EC-marker-positive cells
+  pool_cardiomyocytes: [Atrial Cardiomyocytes, Ventricular Cardiomyocytes]
+  ec_classes: [Arterial Endothelial cells, Capillary Endothelial cells, Venous Endothelial cells,
+               Endocardial Endothelial Cells, Lymphatic Endothelial Cells]
+  ec_markers: [PECAM1, VWF, EGFL7, ERG, RAMP2]      # pan-endothelial genes on hMulti_v1 (CD34 left out: also fibroblast/progenitor)
+  lymphatic_markers: [PROX1, LYVE1, MMRN1]          # counted together with the pan-EC genes for Lymphatic EC
+  ec_min_counts: 2                                   # gate: >= 2 raw transcripts summed over the marker genes
+  ec_min_fraction: 0.05                              # ... AND those transcripts >= 5 % of the cell's panel transcripts
+                                                     # (counts-only gate >= 2 passes 23 % of cardiomyocytes; with the
+                                                     #  fraction 6 %; EC-labelled cells passing: 91 % -> 71 %)
+  ec_negative_label: EC label, marker-negative       # drawn grey; not given a subtype
+
+# ---------------------------------------------------------------------------------------------------------
+# marker genes on the panels that support the transferred labels (notebooks/06_xenium.ipynb)
+markers:
+  healthy:                                          # hMulti_v1 panel, display classes of ED6 i
+    Cardiomyocytes: [DES, FHL2, S100A1]
+    Fibroblasts: [PDGFRA, FBLN1, DPT]
+    Pericytes: [HIGD1B, PDGFRB, KCNK3]
+    Smooth muscle: [MYH11, ACTA2, CNN1]
+    Endothelial: [PECAM1, VWF, EGFL7]
+    Lymphatic EC: [PROX1, LYVE1, MMRN1]
+    Macrophages: [CD163, MRC1, CD14]
+    T cells: [CD3E, CD2, IL7R]
+    Mast cells: [CPA3, KIT, MS4A2]
+    Adipocytes: [ADIPOQ, LPL, PLIN4]
+    Neural: [PMP22, LGI4]
+  rejection:                                        # 477-gene panel of GSE290577, Level-3 classes
+    Cardiomyocytes: [TTN, DES, FHL2]
+    Fibroblasts: [DCN, COL1A1, PDGFRA]
+    Pericytes: [PDGFRB, HIGD1B]
+    Vascular Smooth Muscle cells: [MYH11, ACTA2, CNN1]
+    Endothelial: [PECAM1, VWF, EGFL7]
+    Macrophages: [CD163, CD68, MRC1]
+    Monocytes: [FCN1, S100A12, CD14]
+    Dendritic cells: [CD1C, CLEC10A, FCER1A]
+    T cells: [CD3E, CD3D, CD2]
+    NK cells: [GNLY, NKG7, KLRD1]
+    B cells: [MS4A1, CD79A, BANK1]
+    Plasma Cells: [MZB1, DERL3, TNFRSF17]
+    Mast cells: [CPA3, KIT, MS4A2]
+    Lymphoid Cells (Proliferating): [MKI67, TOP2A, CENPF]
+  lymphoid:                                         # lymphoid Level 4: lineage and proliferation
+    CD4 T: [CD4, IL7R, CD40LG]
+    CD8 T: [CD8A, GZMK, GZMA]
+    NK: [GNLY, KLRD1, FGFBP2]
+    proliferating: [MKI67, TOP2A, CDK1]
+
+# notebooks/06_xenium.ipynb
+notebook:
+  alpha: 0.05                                       # level of the q and p values listed in the tables of the notebook

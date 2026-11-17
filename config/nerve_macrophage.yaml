@@ -1,0 +1,156 @@
+# Pipeline `nerve_macrophage`: nerves and macrophages on the Visium HD substrate -> Fig 5 b-h, j-l
+# (Fig 5 a, i, m, n belong to other pipelines). Read by scripts/nerve_macrophage/read_config.py for
+# workflow/hpc/nerve_macrophage.sbatch, by the pipeline scripts, by the panels in figures/Fig5/ and by
+# notebooks/04_nerves_macrophages.ipynb. Outputs go to results/nerve_macrophage/.
+#
+# Substrate: the full-slide FICTURE decodes and CMFLAG-clean 2 um h5ads of pipeline `substrate`, all 11 slides;
+# one nerve definition (below) for every panel.
+#
+# Path templates: {slide} / {s} is filled per slide; {name} refers to the roots below. HHCA_<ROOT> environment
+# variables override a root.
+
+roots:
+  heart: /path/to/visium_hd       # Visium HD project folder: Space Ranger outputs of the 8 Berlin slides
+  inputs: /path/to/hhca_inputs    # Space Ranger 2 um outputs of the 3 AH slides, microscopy H&E
+
+slides:
+  berlin: [VS_BO_HDZ150319_34_myo, VS_BO_2024BH-008_myo, VS_CA_H0054LV_henricke_epi, VS_CA_H0054LV_henricke_myo,
+           VS_CA_H0054LV_henricke_endo, VS_CA_H0063LV_henricke_epi, VS_CA_H0063LV_henricke_myo,
+           VS_CA_H0063LV_henricke_endo]
+  ah: [VS_AH9_LV_FW_epi, VS_AH10_LV_mid_endo, VS_AH10_LV_mid_epi]
+
+# Inputs: outputs of the pipelines substrate (FICTURE model and decodes, CMFLAG registration and clean 2 um h5ads)
+# and vascular (calibre table), SpaceRanger 2 um outputs.
+substrate:
+  factor_order: "results/substrate/model/atlas_L3_factor_order.json"
+  decode: "results/substrate/decode/{s}/output/atlas_L3.decode.prj_12.r_4.0_5.0.pixel.tsv.gz"
+  h5ad_2um: "results/substrate/clean_h5ad/h5ad_2um_CMFLAG_clean/{s}.h5ad"
+  h5ad_8um: "results/substrate/clean_h5ad/h5ad_8um_CMFLAG_clean/{s}.h5ad"   # section overview (notebook)
+  registration: "results/substrate/cmflag/registration/{s}_align_grids.npz"
+  spaceranger: "{heart}/Spaceranger312sturm/{s}_GRCh38-2020-A/outs/binned_outputs/square_002um"
+  spaceranger_ah: "{inputs}/Spaceranger312sturm/{s}_GRCh38-2020-A/outs/binned_outputs/square_002um"
+  # vessel-structure calibre table of pipeline `vascular` (only for the macrophage covariates
+  # dist_vessel_struct_um / class_near; not used by Fig 5 k-l). Absent -> those columns are NaN.
+  caliber: "results/vascular/caliber/caliber_per_structure.csv"
+
+# ---------------------------------------------------------------------------------------------------------------
+# Nerve definition (one definition for all 11 slides and every panel d-h, k-l; copied into the uns of every
+# per-nerve pseudobulk written by nerves.py)
+nerve:
+  neural_type: Neural Cells       # Level-3 label of a 2 um bin in the CMFLAG-clean 2 um h5ad (max-P1 decode row)
+  unit: unique 2 um bin           # one obs per 2 um bin; duplicate decode rows never counted
+  linkage_um: 6.0                 # single linkage: bins closer than 6 um belong to the same component
+  min_bins: 3                     # a nerve = component of >= 3 neural bins (= DBSCAN eps 6, min_samples 3 on unique bins)
+  counts: member bins             # pseudobulk = sum of the SpaceRanger 2 um counts of the member bins (no halo)
+  myelin_genes: [MBP, PLP1, MOG, MPZ, PMP22]
+  myelinated_min: 3               # myelin_total >= 3 -> myelinated; == 0 -> non-myelinated; 1-2 dropped (g, h)
+  size_classes: [3, 6, 10, 20, 40, 10000]   # e: 3-5, 6-9, 10-19, 20-39, >=40 bins
+  # gene universe for g, h: genes measured on every slide (intersection of the 2 um h5ad feature panels)
+  gene_universe: panel_intersection
+
+# Fig 5 d: per nerve = shortest distance from a nerve's bins to the nearest vascular bin, against the same nerve
+# shapes placed at random tissue positions (nerve_vessel_distance_pernerve.py: medoid bin moved onto a random
+# non-neural, non-vascular bin; kept when >= 90% of the moved bins are within 1.5 um of a tissue bin).
+proximity:
+  unit: nerve
+  vascular_types: [Capillary Endothelial cells, Arterial Endothelial cells, Venous Endothelial cells,
+                   Vascular Smooth Muscle cells, Pericytes]
+  placements_per_nerve: 5
+  seed: 0
+  max_tries: 50                   # random positions tried per placement
+  min_on_tissue: 0.9              # share of the moved bins that must lie on tissue ...
+  on_tissue_um: 1.5               # ... that is, within this distance of a bin of the section
+  near_um: [8, 16]                # distances at which the share of nerves next to a vessel is reported
+
+# Fig 5 g, h (drug2cell 0.1.2, bundled ChEMBL dictionary; score = drug2cell `score`, method "mean", on
+# normalize_total 1e4 + log1p of the nerve pseudobulks; 18,085-gene universe). The myelin genes
+# (nerve.myelin_genes), which define the myelinated / non-myelinated groups, are removed from every target set
+# before scoring (cipn_drug2cell.py).
+drugs:
+  score: drug2cell
+  exclude_myelin_targets: true
+  min_bins: 15
+  min_counts: 80
+  detected_frac: 0.10
+  g_chembl: [CHEMBL428647, CHEMBL1201748, CHEMBL90555, CHEMBL159, CHEMBL325041, CHEMBL468, CHEMBL1201752]
+  h_cipn:
+    - [CHEMBL428647, paclitaxel, taxane]
+    - [CHEMBL92, docetaxel, taxane]
+    - [CHEMBL1201748, cabazitaxel, taxane]
+    - [CHEMBL90555, vincristine, vinca]
+    - [CHEMBL159, vinblastine, vinca]
+    - [CHEMBL2068237, cisplatin, platinum]
+    - [CHEMBL414804, oxaliplatin, platinum]
+    - [CHEMBL1351, carboplatin, platinum]
+    - [CHEMBL325041, bortezomib, proteasome]
+    - [CHEMBL468, thalidomide, IMiD]
+    - [CHEMBL1201752, ixabepilone, epothilone]
+    - [CHEMBL1683590, eribulin, microtubule]
+  check_targets: [TUBB, TUBB3, TUBA1B, MAPT, MAP2]   # presence in the gene universe (universe.json)
+
+# Fig 5 k, l: macrophage pseudo-cells (macrophage_pseudocells.py: DBSCAN eps 10 um, min 3, 12 um tile split
+# above 50 bins, >= 100 counts) on the slide's decode; perineural = centroid within 30 um of a neural bin of a nerve
+# as defined above (component of >= 3 neural bins at 6 um linkage) = nerve_clusters.py dist_nerve_k3 < 30
+macrophage:
+  cell_type: Macrophages          # Level-3 type of the decode pixels that are joined into pseudo-cells
+  pseudocells:
+    eps_um: 10.0                  # DBSCAN radius on the decode pixels
+    min_pixels: 3                 # DBSCAN min_samples; also the pixels a tile of a split cluster needs
+    split_pixels: 50              # clusters with more pixels are cut into tiles
+    tile_um: 12.0                 # side of the tiles
+    min_counts: 100               # counts a pseudo-cell needs
+  panel_l: regression             # slide-adjusted OLS, perineural effect per marker, BH over the markers
+  perineural_um: 30.0
+  dist_col: dist_nerve_k3
+  markers: [SPP1, LYVE1, F13A1, C1QA, MRC1, FOLR2]              # rows of Fig 5 l, top to bottom
+  regression_markers: [SPP1, LYVE1, F13A1, MRC1, C1QA, FOLR2]   # order of the rows of l_regression.csv
+  # per-cell covariate table (macrophage_covariates.py)
+  covariate_markers: [LYVE1, FOLR2, MRC1, F13A1, SPP1, CCR2, C1QA, VCAN]
+  vessel_bins:                    # Level-3 types of the bins a pseudo-cell is measured against
+    broad: [Vascular Smooth Muscle cells, Pericytes, Capillary Endothelial cells, Arterial Endothelial cells,
+            Venous Endothelial cells, Lymphatic Endothelial Cells, Endocardial Endothelial Cells]
+    mural: [Vascular Smooth Muscle cells, Arterial Endothelial cells, Venous Endothelial cells]
+  # nerves of increasing minimum size (nerve_clusters.py): distance of a pseudo-cell to the nearest neural bin
+  # linked with >= k neural bins, and the slope of the markers on that distance
+  nerve_min_sizes: [1, 3, 5, 10]
+  distance_markers: [SPP1, F13A1, LYVE1]
+  calibre_rank: {small_resistance: 0, intermediate: 1, large_conductance: 2}
+  distance_profile:               # SPP1 by distance to the nearest nerve
+    edges_um: [0, 20, 40, 60, 100, 150, 250, 1500]
+    centres_um: [10, 30, 50, 80, 125, 200, 320]
+
+# ---------------------------------------------------------------------------------------------------------------
+# Histology fields (b, c, f, j). Coordinates are FICTURE/bin micrometres of VS_BO_HDZ150319_34_myo, so they do not
+# depend on the registration. H&E: microscopy TIF through the CMFLAG registration (M0, t0 from
+# results/substrate/cmflag/registration/) plus a per-field phase-correlation offset against the CytAssist image
+# (CMFLAG's auto_offset: 160 um half-tile at 2 um, kept if err <= 0.45 and |offset| <= 110 um, as in
+# the CMFLAG field registration of pipeline `substrate`). Labels: CMFLAG-clean 2 um h5ad.
+fields:
+  slide: VS_BO_HDZ150319_34_myo
+  tif: "{inputs}/substrate_cmflag/he/BO_HDZ150319_34_myo.tif"
+  cytassist_dir: "{heart}/Spaceranger312sturm/VS_BO_HDZ150319_34_myo_GRCh38-2020-A/outs/binned_outputs/square_008um/spatial"
+  b:
+    # nerve next to a vessel, 120 um field
+    centre: [5924.0, 7027.0]
+    side_um: 120.0
+    show: [Neural Cells]
+  c:
+    # 800 um window (X 5115-5915, Y 5810-6610): clean-h5ad bins of the full-slide decode on the registered
+    # microscopy H&E (offset at the window centre)
+    underlay: microscopy
+    window: [5115.0, 5915.0, 5810.0, 6610.0]
+  f:
+    # myelinating nerve (centroid below), 110 um crop; per-bin display score = myelin counts within 4 um of the bin
+    centre: [6238.317609, 5933.209326]
+    side_um: 110.0
+    display_radius_um: 4.0
+  j:
+    # two 300 um macrophage fields
+    fields:
+      myeloid_peri: {centre: [5547.0, 6284.0], side_um: 300.0}
+      myeloid_nerve: {centre: [5944.0, 6990.0], side_um: 300.0}
+    show: [Macrophages, Capillary Endothelial cells, Pericytes, Vascular Smooth Muscle cells, Arterial Endothelial cells]
+  registration_tile_half_um: 160.0
+  registration_res_um: 2.0
+  registration_err_max: 0.45
+  registration_offset_cap_um: 110.0

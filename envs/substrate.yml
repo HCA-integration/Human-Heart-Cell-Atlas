@@ -1,0 +1,15 @@
+# FICTURE input builders, atlas profile builder and the 2 um / 8 um h5ad builders
+# (Python 3.9.20, numpy 1.26.4, pandas 2.2.3, h5py 3.12.1, pyarrow 18.0.0, scipy 1.13.1, anndata 0.10.9).
+name: hhca-substrate
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  - python=3.9.20
+  - numpy=1.26.4
+  - pandas=2.2.3
+  - h5py=3.12.1
+  - pyarrow=18.0.0
+  - scipy=1.13.1
+  - anndata=0.10.9
+  - pyyaml

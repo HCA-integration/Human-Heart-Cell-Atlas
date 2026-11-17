@@ -1,0 +1,70 @@
+# Pipeline `xenium`: CellPin label transfer with the HHCA atlas as reference, for the healthy section (ED6 i) and the
+# transplant-rejection cohort (Fig 6, ED9, ED6 j). The settings below are the defaults the scripts in
+# scripts/xenium/ use; the sbatch files in workflow/hpc/xenium_*.sbatch pass the paths.
+
+inputs:
+  # public inputs, downloaded by scripts/xenium/download_*.sh
+  root: /path/to/hhca_inputs/xenium
+  healthy_10x:
+    dataset: Xenium_V1_hHeart_nondiseased_section_FFPE    # 10x "Human Non-diseased Heart (FFPE)", hMulti_v1, 377 genes
+    base_url: https://cf.10xgenomics.com/samples/xenium/1.9.0/Xenium_V1_hHeart_nondiseased_section_FFPE
+    files: [cell_feature_matrix.h5, cells.parquet, gene_panel.json]
+  gse290577:
+    base_url: https://ftp.ncbi.nlm.nih.gov/geo/series/GSE290nnn/GSE290577/suppl
+    object: GSE290577_heart_spatial.rds                  # Aug 2025 object, used downstream
+    previous: GSE290577_heart_spatial_obj.rds            # Mar 2025 object, used for the label transfer; same counts,
+                                                         # `lineage` Mesenchymal -> Stromal
+    metadata: GSE290577_heart_spatial_metadata.txt.gz
+  atlas: /path/to/atlas/final_cleaned_hhca_annotated.h5ad
+
+cellpin:
+  package: cellpin 0.1.1, github.com/Saur-Lab/cellpin @ 48b97bc394c7b8b672e51c5455aca7ed4e4fec8d
+  # train_cellpin.py SMALL_CONFIG: smaller than the CellPin paper defaults
+  n_latent: 48
+  n_hidden: 256
+  encoder_layers: 3
+  decoder_layers: 2
+  encoder_dropout: 0.1
+  reconstruction_loss: nb
+  pretrain_epochs: 12
+  train_epochs: 15
+  batch_size: 256
+  early_stopping_patience: 5
+  seed: 0
+  accelerator: cpu        # CPU torch wheel; training uses the ~40k-cell reference only, query size does not matter
+
+reference:                # build_cellpin_reference.py
+  label_L3: Final Level 3_harmonized
+  label_L4: Final Level 4_harmonized
+  drop: [Unassigned]
+  cap_per_L3: 2000        # class-balanced subsample, seed 0
+  seed: 0
+  hvg_column: highly_variable-batch_key=donor_id-n_top_genes=3000
+  genes: panel ∩ atlas  ∪  3000 batch-aware HVGs  ∪  42 curated markers
+  # rejection only: every atlas cell of these L3 classes is also written (same genes) for the L4 lymphoid kNN
+  extra_L3_rejection: [T cells, NK cells, Lymphoid Cells (Proliferating), ILC]
+
+annotate:                 # transfer_labels.py
+  k: 25
+  weights: distance
+  latent_standardisation: reference mean / sd
+  heldout: 20 % stratified split of the reference subsample, seed 0
+  min_f1_reliable: 0.5    # classes with held-out F1 below this are flagged unreliable
+  l4_healthy: within predicted L3 (hierarchical kNN), reported per class with held-out F1
+
+immune_L3: [Macrophages, Monocytes, Dendritic cells, Mast cells, T cells, NK cells, ILC, B cells, Plasma Cells,
+            Lymphoid Cells (Proliferating)]
+ilc_rule: "exclude ILC from the immune set when its held-out F1 < annotate.min_f1_reliable"
+
+lymphoid_l4:              # lymphoid_level4.py (rejection): 4 lineages x proliferation
+  compartment_L3: [T cells, NK cells, Lymphoid Cells (Proliferating)]
+  proliferating_L3: Lymphoid Cells (Proliferating)
+  lineage_from_L4:
+    CD4 T: [CD4 T Cells Naive, CD4 T Cells central memory, CD4 T Cells Tissue-resident memory, CD4 T Cells TH1-Like,
+            CD4 T Cells TH17-Like, CD4 T Cells AREG]
+    Treg: [CD4 Tregs]
+    CD8 T: [CD8 T Cells central memory, CD8 T Cells effector memory, CD8 T Cells TE, CD8 T Cells TEMRA, CD8 T Cells TEX,
+            CD8 T Cells TEX Prog]
+    NK: [NK Cells CD16hi, NK Cells CD16lo]
+  dropped_L4: [T Cells - Gamma-Delta, T Cells - MAIT, ILC, T / NK (Proliferating)]
+  pretty: {CD4 T: CD4 T cells, CD8 T: CD8 T cells, Treg: Tregs, NK: NK cells}

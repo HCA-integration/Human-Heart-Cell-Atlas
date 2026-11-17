@@ -1,0 +1,36 @@
+# RCTD (spacexr) and SPOTlight on R 4.5.1: SPOTlight 1.14.0 (Bioconductor 3.22) and spacexr 2.2.1 from
+# GitHub dmcable/spacexr @ 9f5dc33c8060f946c6072a138b70e189636e1435, with conda-forge / bioconda builds of the
+# R packages. spacexr is not on conda for R 4.5 (bioconda r-spacexr is an R 4.3 build), so
+# workflow/hpc/deconvolution_envs.sbatch installs it into this env from the GitHub tarball of that commit
+# (no network access needed at run time).
+name: hhca-deconv-r
+channels:
+  - conda-forge
+  - bioconda
+  - nodefaults
+dependencies:
+  - r-base=4.5.1
+  - r-matrix
+  - bioconductor-spotlight=1.14.0
+  - bioconductor-singlecellexperiment=1.32.0
+  - bioconductor-sparsematrixstats=1.22.0
+  # spacexr 2.2.1 Imports (its DESCRIPTION)
+  - r-readr
+  - r-ggplot2
+  - r-pals
+  - r-doparallel
+  - r-foreach
+  - r-quadprog
+  - r-tibble
+  - r-dplyr
+  - r-reshape2
+  - r-knitr
+  - r-rmarkdown
+  - r-fields
+  - r-mgcv
+  - r-compquadform
+  - r-rfast
+  - r-locfdr
+  - r-metafor
+  - r-data.table
+  - r-jsonlite

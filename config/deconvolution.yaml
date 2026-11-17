@@ -1,0 +1,140 @@
+# Deconvolution of standard Visium: shared reference, six published methods and NNLS, ground-truth simulation
+# from the Visium HD decodes, endo-LV comparison with Visium HD, and the panels Fig 3 c, ED6 c, g, h and ED8 b-c.
+# All methods run with fixed seeds in pinned environments (envs/deconv_*.yml). ED6 c, g, h are drawn from the
+# benchmark per-spot outputs (inputs.benchmark_outputs).
+# workflow/hpc/deconvolution_*.sbatch pass the paths to the scripts as arguments; the settings are read from this
+# file by the scripts, by the panels and by notebooks/05_visium_deconvolution.ipynb (the jobs of the NNLS environment,
+# which has no YAML reader, get a JSON copy written by scripts/deconvolution/deconv_config.py).
+
+inputs:
+  root: /path/to/hhca_inputs/visium
+  # Noseda cohort (unpublished, no accession): Space Ranger 2.1.1 outputs from the data providers' SFTP server
+  # (scripts/deconvolution/download_noseda_mdc.sh). Used here: filtered_feature_bc_matrix.h5,
+  # metrics_summary.csv and spatial/ in noseda/<slide>/.
+  noseda: noseda
+  # Kanemaru 2023 Visium (E-MTAB-12975), OCT cryosections, LA/RA/LV/RV; scripts/deconvolution/download_kanemaru.sh
+  kanemaru: kanemaru
+  kanemaru_base_url: https://cellgeni.cog.sanger.ac.uk/heartcellatlas
+  kanemaru_files:
+    lognormalised: visium/visium-OCT_{region}_lognormalised.h5ad   # what Fig 3 c / ED8 b-c read (Kanemaru c2l in obsm)
+  # benchmark tables: NNLS per-spot tables (ED6 c, g, h), HD nucleus-count and snRNA composition tables
+  # (endo-LV comparison)
+  benchmark_tables: reference_deconvolution
+  # benchmark per-spot outputs behind ED6 c/g/h (<method>/<slide>.csv.gz)
+  benchmark_outputs: /path/to/hhca_precomputed/deconv_benchmark/outputs
+  atlas: /path/to/atlas/final_cleaned_hhca_annotated.h5ad
+  # NNLS signatures: Level-3 atlas profile of the substrate pipeline
+  pseudobulk_L3: results/substrate/model/atlas_L3_pseudobulk.tsv
+  factor_order_L3: results/substrate/model/atlas_L3_factor_order.json
+  hd_decode: results/substrate/decode/{slide}/output/atlas_L3.decode.prj_12.r_4.0_5.0.pixel.tsv.gz
+  # inputs of the FICTURE decode of a Visium HD section: transcripts, gene list and section bounds (um)
+  hd_transcripts: results/substrate/decode/{slide}/inputs/transcripts.tsv.gz
+  hd_features: results/substrate/decode/{slide}/inputs/feature.clean.tsv.gz
+  hd_bounds: results/substrate/decode/{slide}/inputs/coordinate_minmax.tsv
+
+slides:
+  benchmark: [HHH1-LA, HHH2-LV-endo-1, HHH4-RA2, HHH4-RV2, A17-AH1-C1, A18-AH2-D1, HHH2-D1, HHH2-LV-endo-2,
+              HHH4-A1, HHH5-B1, HHH5-C1]          # the 11 Noseda slides with spatial/ (ED6 h)
+  nnls_only: [HHH2-LV-epi-1, HHH2-LV-epi-2, HHH2-RA, HHH4-LA, HHH4-LV-epi]     # no spatial/: NNLS and Fig 3 c only
+  fig3c_region: {HHH1-LA: LA, HHH4-LA: LA, HHH2-RA: RA, HHH4-RA2: RA, HHH2-LV-endo-1: LV, HHH2-LV-endo-2: LV,
+                 HHH2-LV-epi-1: LV, HHH2-LV-epi-2: LV, HHH4-LV-epi: LV, HHH4-RV2: RV}
+  kanemaru_regions: [LA, RA, LV, RV]
+  gtsim_hd: [VS_BO_HDZ150319_34_myo, VS_CA_H0054LV_henricke_myo, VS_CA_H0054LV_henricke_epi,
+             VS_CA_H0054LV_henricke_endo]
+  gtsim_region: {VS_BO_HDZ150319_34_myo: myo, VS_CA_H0054LV_henricke_myo: myo, VS_CA_H0054LV_henricke_epi: epi,
+                 VS_CA_H0054LV_henricke_endo: endo}       # position in the wall
+  endo_sv: [HHH2-LV-endo-1, HHH2-LV-endo-2]
+  endo_hd: [VS_CA_H0054LV_henricke_endo, VS_CA_H0063LV_henricke_endo]
+
+reference:               # build_reference.py
+  label: Final Level 3_harmonized
+  exclude: [Unassigned]
+  n_per_type: 1000
+  seed: 0                # numpy default_rng(0)
+  obs_columns: [sex, tissue_general, donor_id, development_stage, dataset, assay, suspension_type, manner_of_death]
+
+# Cardiac marker genes that NNLS and the gene panel always keep, whatever their variability
+markers:
+  cardiac: [MYL2, MYH7, TNNT2, RYR2, TNNI3, PLN, ACTN2, MYL7, NPPA, SLN, KCNJ3, DCN, PDGFRA, COL1A1, COL3A1, LUM, GSN,
+            PECAM1, VWF, CDH5, EGFL7, NPR3, PCDH15, POSTN, RGS5, NOTCH3, PDGFRB, KCNJ8, ABCC9, MYH11, ACTA2, TAGLN,
+            CNN1, LMOD1, CD163, MRC1, LYVE1, C1QA, C1QB, CD68, CD3E, CD8A, IL7R, CCL5, KIT, CPA3, GPAM, ADIPOQ, PLIN1,
+            NRXN1, PLP1, KCNMB4]
+  lymphatic: [PROX1, FLT4, CCL21, MMRN1]      # added to the gene panel
+
+qc:                      # prep_inputs.py and run_atlas_deconv.py (the same filters in both)
+  min_cells_per_gene: 3
+  min_counts_per_spot: 200
+
+# GPU methods run on V100 / A100 cards (GPU_CONSTRAINT in workflow/hpc/cluster.sh).
+seed: 0                  # spotiphy (torch/pyro/numpy), cell2location and stereoscope (scvi.settings.seed),
+                         # SPOTlight (set.seed); UCASpatial uses random_seed=12345.
+
+methods:
+  # gene panel of cell2location and stereoscope (make_gene_panel.py): scanpy 'seurat' dispersion HVGs on
+  # log1p CP10k, plus cardiac markers
+  gene_panel: {n_hvg: 3000, flavor: seurat, panel_size: 3001, min_cells: 5}
+  cell2location: {regression_epochs: 250, map_epochs: 15000, N_cells_per_location: 8, detection_alpha: 20,
+                  gtsim_map_epochs: 8000}
+  stereoscope: {rna_epochs: 100, spatial_epochs: 2000}
+  spotiphy: {n_select: 50, threshold_p: 0.1, threshold_fold: 1.5, q: 0.15, n_epoch: 8000, batch_prior: 1}
+  ucaspatial: {n_cluster: 200, downsample_n: 1, random_seed: 12345, meta_filter: false, blas_threads: 8}
+  # blas_threads: 8 CPUs. UCASpatial output depends on the BLAS thread count on some slides.
+  RCTD: {doublet_mode: full, CELL_MIN_INSTANCE: 20, max_cores: 1}
+  SPOTlight: {markers: custom top-100 logFC on log1p CP10k}
+  NNLS: {reference: atlas_L3 pseudobulk, genes: top-2000 CV across types + markers, proportion: mRNA fraction,
+         n_top_genes: 2000}
+
+gtsim:                   # ground-truth simulation (build_sim.py, prep_sim_inputs.py)
+  tile_um: 55.0
+  min_counts: 200
+  min_pixels: 50
+  min_cells: 3
+  max_spots: 5000
+  seed: 0
+  chunk: 8000000         # rows of the decode and of the transcripts read at a time
+  # cell types of the known-against-estimated scatter figure
+  scatter_types: [Ventricular Cardiomyocytes, Fibroblasts, Capillary Endothelial cells, Pericytes, Macrophages,
+                  Endocardial Endothelial Cells]
+
+# Method comparison on the benchmark slides (compare_methods.py) and on the simulation (score_gt.py)
+comparison:
+  methods: [NNLS, cell2location, stereoscope, spotiphy, ucaspatial, SPOTlight, RCTD]
+  atrial_slides: [HHH1-LA, HHH4-RA2]          # chamber of a slide without an NNLS result
+  # a method reports a uniform background of a cell type when its mean proportion on ventricular slides is above
+  # min_ventricular, more than min_ratio times the atrial mean, and its CV between ventricular slides below max_cv
+  floor:
+    cell_types: [Lymphatic Endothelial Cells, Mast cells, T cells, Dendritic cells]
+    min_ventricular: 0.03
+    min_ratio: 3
+    max_cv: 0.6
+  compartments:                               # compartment -> Level-3 types (ED6 h)
+    CM: [Ventricular Cardiomyocytes, Atrial Cardiomyocytes]
+    Fibroblast: [Fibroblasts]
+    Endothelial: [Capillary Endothelial cells, Arterial Endothelial cells, Venous Endothelial cells,
+                  Endocardial Endothelial Cells, Lymphatic Endothelial Cells]
+    Pericyte: [Pericytes]
+    Myeloid: [Macrophages, Monocytes, Dendritic cells]
+    Lymphoid: [T cells, B cells, NK cells, ILC, Plasma Cells, Lymphoid Cells (Proliferating)]
+    Mast: [Mast cells]
+    SMC: [Vascular Smooth Muscle cells]
+    Adipocyte: [Adipocytes]
+    Neural: [Neural Cells]
+    Epicardium: [Epicardium]
+
+figures:
+  # ED6 c (Visium row) and ED6 g zoom windows on HHH2-LV-endo-1, centres in full-resolution pixels. Chosen as
+  # the window with the highest mean non-cardiomyocyte proportion (spotiphy) among windows centred on the 150
+  # spots with the highest non-cardiomyocyte proportion.
+  ed6_slide: HHH2-LV-endo-1
+  ed6_g_fov: {centre_px: [5029.0, 6401.0], size_px: 1400.0}
+  ed6_c_fov: {centre_px: [5219.0, 6290.0], size_px: 1500.0}
+
+downstream:
+  fig3c_cm: [Atrial Cardiomyocytes, Ventricular Cardiomyocytes]
+  fig3c_cm_kanemaru: [Atrial-CM, Ventricular-CM]            # coarse lineages of hhca.tl.kanemaru_lineage
+  ed8_pericyte_kanemaru: [PC1_vent, PC2_atria, PC3_str, PC4_CMC-like]
+  ed8_regions: {LA: atria, RA: atria, LV: ventricle, RV: ventricle}
+  ed8_tertile: [0.3333333333333333, 0.6666666666666666]     # 1/3 and 2/3
+  fig3c_extra_gene: POTEJ                     # atrial cardiomyocyte gene outside the panel, shown with it
+  # Fig 3 c: CM-dominant = Noseda NNLS dominant_L3 or Kanemaru's own cell2location coarse argmax is a CM type.
+  # ED8 c: pericyte-high = top within-region tertile of the Kanemaru cell2location pericyte abundance.

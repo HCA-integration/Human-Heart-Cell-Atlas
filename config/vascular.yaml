@@ -1,0 +1,179 @@
+# Pipeline `vascular`: vessel structures, calibre, composition, wall markers, RAAS and drug-target
+# calibre selectivity on the Visium HD substrate -> Fig 4 f-k.
+# Read by the scripts in scripts/vascular/, by figures/Fig4/panel_f.py and by notebooks/03_vessels.ipynb.
+# Outputs go to results/vascular/.
+#
+#   Fig 4 g-k:  workflow/hpc/vascular.sbatch
+#               (scripts/vascular/run_vascular.sh, then figures/Fig4/panel_{g..k}.py)
+#   Fig 4 f:    scripts/vascular/fig4f_fields.py extract --flags-dir results/substrate/cmflag/flags,
+#               then figures/Fig4/panel_f.py (reads the registered H&E images, fig4f.he below)
+#
+# Path templates: {slide} is filled per slide; {name} refers to the roots below. HHCA_<ROOT> environment
+# variables override a root (e.g. HHCA_INPUTS=/elsewhere).
+
+roots:
+  heart: /path/to/visium_hd
+  inputs: /path/to/hhca_inputs
+
+# Space Ranger 2 um outputs; the AH sections use the square_002um layout rebuilt from feature_slice.h5
+# (config/substrate.yaml)
+spaceranger: "{heart}/Spaceranger312sturm/{slide}_GRCh38-2020-A/outs/binned_outputs/square_002um"
+spaceranger_ah: "{inputs}/Spaceranger312sturm/{slide}_GRCh38-2020-A/outs/binned_outputs/square_002um"
+
+# Substrate: decodes, 2 um h5ads and Level-3 factor order written by pipeline `substrate` (paths relative to the
+# repository root).
+substrate:
+  decode: "results/substrate/decode/{slide}/output/atlas_L3.decode.prj_12.r_4.0_5.0.pixel.tsv.gz"
+  h5ad_2um: "results/substrate/h5ad_2um/{slide}.h5ad"
+  h5ad_8um_clean: "results/substrate/clean_h5ad/h5ad_8um_CMFLAG_clean/{slide}.h5ad"   # section overview (notebook)
+  factor_order: "results/substrate/model/atlas_L3_factor_order.json"
+
+# CMFLAG flags (pipeline `substrate`): <slide>_clean_bins.parquet per slide. A 2 um bin is removed when any of
+# flag_cm_spillover, flag_vsmc_spillover, flag_spill_artEC, flag_spill_venEC is set (4 spillover flags only).
+# Structures and calibre are called on the full decode; the mask acts on:
+#   g   vote recount per structure (struct_votes_clean.py)
+#   h   decode pixels and SpaceRanger bins of flagged keys removed (marker_aggregate.py --flags)
+#   i,j SpaceRanger bins of flagged keys removed before the 8 um aggregation; the library is still the common
+#       panel (raas_substrate.py --flags)
+#   k   flagged h5ad bins removed (struct_pb_h5ad.py)
+flags: results/substrate/cmflag/flags
+
+# Slide order sets the row order of concatenated tables.
+slides:
+  berlin: [VS_BO_2024BH-008_myo, VS_BO_HDZ150319_34_myo, VS_CA_H0054LV_henricke_endo, VS_CA_H0054LV_henricke_epi,
+           VS_CA_H0054LV_henricke_myo, VS_CA_H0063LV_henricke_endo, VS_CA_H0063LV_henricke_epi, VS_CA_H0063LV_henricke_myo]
+  ah: [VS_AH9_LV_FW_epi, VS_AH10_LV_mid_endo, VS_AH10_LV_mid_epi]
+  # calibre cut points D90 / D33 come from the 8 Berlin slides only and are applied to all 11
+  # row order of the pooled RAAS table (AH first)
+  raas_pool_order: [VS_AH9_LV_FW_epi, VS_AH10_LV_mid_endo, VS_AH10_LV_mid_epi, VS_BO_2024BH-008_myo,
+                    VS_BO_HDZ150319_34_myo, VS_CA_H0054LV_henricke_endo, VS_CA_H0054LV_henricke_epi,
+                    VS_CA_H0054LV_henricke_myo, VS_CA_H0063LV_henricke_endo, VS_CA_H0063LV_henricke_epi,
+                    VS_CA_H0063LV_henricke_myo]
+  # common gene set of the Fig 4 k pseudobulk = var(BO_2024BH-008) & var(AH9) of the 2 um h5ads
+  common_from: [VS_BO_2024BH-008_myo, VS_AH9_LV_FW_epi]
+
+resources:
+  common_panel: resources/vascular/common_panel_symbols.json   # 18,082 SpaceRanger feature names (RAAS library)
+
+# Vessel structures: connected components (8-connectivity) of vascular cells on a lattice
+structures:
+  # short name -> Level-3 type of the five vascular cell types (order sets the tie-break of the dominant type)
+  vascular_types:
+    ArterialEC: Arterial Endothelial cells
+    CapillaryEC: Capillary Endothelial cells
+    VenousEC: Venous Endothelial cells
+    Pericyte: Pericytes
+    VSMC: Vascular Smooth Muscle cells
+  lattice_um: 8.0            # lattice cell = 4 x 4 decode pixels of 2 um
+  min_votes: 2               # vascular 2 um pixels needed for a vascular lattice cell
+  muscular_vsmc_fraction: 0.10   # VSMC vote fraction from which a structure is a muscular artery or vein
+
+# Calibre classes: cut points are quantiles of the diameters on the Berlin sections
+calibre:
+  large: {quantile: 0.90, min_vsmc_fraction: 0.20}    # large_conductance: diameter >= D90 and VSMC share >= 0.20
+  small: {quantile: 0.33, max_vsmc_fraction: 0.05}    # small_resistance: diameter <= D33 and VSMC share < 0.05
+
+# Fig 4 g: composition along calibre in bins of fixed log width
+composition:
+  diameter_bins: {low: 8.9, high: 220.0, n_edges: 18}   # um
+  size_bins: {low: 0.99, high: 400.0, n_edges: 18}      # lattice cells per structure
+  min_structures: 20         # structures needed for a bin to be drawn
+
+# Fig 4 h: marker counts per vessel-wall compartment
+markers:
+  pericyte_radius_um: 6.0    # a capillary EC bin is pericyte-carrying within this distance of a pericyte bin
+  vessel_types: [Vascular Smooth Muscle cells, Arterial Endothelial cells, Pericytes, Capillary Endothelial cells,
+                 Venous Endothelial cells, Lymphatic Endothelial Cells, Endocardial Endothelial Cells]
+  # vessel-wall marker panel (25 genes)
+  panel: [MYH11, ACTA2, SEMA3G, RGS5, ABCC9, CA4, RGCC, GPIHBP1, ACKR1, PLVAP, PROX1, LYVE1, NPR3, SMOC1, GJA5, GJA4,
+          GJA1, GJC1, CLDN5, CDH5, TJP1, OCLN, F11R, CAV1, CAV2]
+  # every connexin in the Space Ranger feature set
+  connexins: [GJA1, GJA10, GJA3, GJA4, GJA5, GJA8, GJA9, GJB1, GJB2, GJB3, GJB4, GJB5, GJB6, GJB7, GJC1, GJC2, GJC3,
+              GJD2, GJD3, GJD4, GJE1]
+  # tight-junction genes in the Space Ranger feature set
+  tight_junctions: [CLDN1, CLDN2, CLDN3, CLDN4, CLDN5, CLDN6, CLDN7, CLDN8, CLDN9, CLDN10, CLDN11, CLDN12, CLDN14,
+                    CLDN15, CLDN16, CLDN17, CLDN18, CLDN19, CLDN20, CLDN22, CLDN23, CLDN24, CLDN25, CLDN34, TJP1,
+                    TJP3, OCLN, F11R, JAM2, JAM3, MARVELD1, MARVELD2, MARVELD3, CGN, CGNL1, TJAP1, CRB3, PATJ, ESAM,
+                    MPDZ, SYMPK, LSR, ILDR1, ILDR2, CXADR, CDH5]
+  detected: {min_counts: 20, min_pct: 0.5}   # a gene is detected with >= 20 counts and >= 0.5 % of bins in one compartment
+
+# Fig 4 i, j: RAAS genes per vessel structure and the joint model
+raas:
+  genes: [AGT, REN, ACE, ACE2, AGTR1, AGTR2, ENPEP, ANPEP, MME, CMA1, CTSG, MAS1]
+  # transcription factors higher / lower in AGT+ pericytes (SCENIC+), summed alongside
+  tf_up_in_agt_pos: [USF2, JUND, KLF2, SOX4, CHURC1, DRAP1, JUNB, CEBPD, RAD21, SOX9]
+  tf_up_in_rest: [PKNOX2, UBE2K, ZNF37A, ATF6, CHD1, CHD2, SMAD3, GATAD2A, BACH1, ILF3]
+  model_genes: [AGT, ACE, ACE2, AGTR1, ENPEP]
+  vessel_types: [Arterial(muscular), Arteriole, Capillary/microvessel, Venous, Venous(muscular)]
+  alpha: 0.05                # BH-FDR level of the contrasts
+  min_bins: 20               # lattice cells needed per (section, vessel type) for a pseudobulk rate
+  robust_fraction: 0.70      # share of sections that must agree for an ordering to count as robust
+
+# Fig 4 k: drug-target classes (ChEMBL targets as listed in drug2cell 0.1.2) and their wall compartment
+drug:
+  classes:
+    Endothelin receptor antagonists: {genes: [EDNRA, EDNRB], compartment: mural}
+    Angiotensin receptor blockers: {genes: [AGTR1, AGTR2], compartment: mural}
+    ACE inhibitors: {genes: [ACE], compartment: endothelial}
+    "Nitrates / NO-sGC": {genes: [GUCY1A1, GUCY1A2, GUCY1B1], compartment: mural}
+    PDE5 inhibitors: {genes: [PDE5A], compartment: mural}
+    PDE3 inhibitors: {genes: [PDE3A, PDE3B], compartment: mural}
+    Calcium-channel blockers: {genes: [CACNA1C, CACNA1D], compartment: mural}
+    Alpha-1 blockers: {genes: [ADRA1A, ADRA1B, ADRA1D], compartment: mural}
+    "Direct vasodilators (K-ATP)": {genes: [KCNJ8, ABCC9, KCNJ11], compartment: mural}
+    ROCK inhibitors: {genes: [ROCK1, ROCK2], compartment: mural}
+    Prostacyclin pathway: {genes: [PTGIR, PTGDR], compartment: mural}
+  min_library: 50            # common-gene library needed for a structure to enter the tests
+  chunk_bins: 400000         # 2 um bins read per block from the h5ad
+
+# Fig 4 f: H&E field with the FICTURE vascular bins filled and every in-tissue 2 um bin without a cell-type
+# assignment hatched (no decode pixel, or removed by CMFLAG). Extracts: scripts/vascular/fig4f_fields.py;
+# panel: figures/Fig4/panel_f.py.
+# H&E: registered microscopy images of the two slides with a native-resolution registration
+# (H_um_to_microraw of each slide's registration JSON, copied below).
+fig4f:
+  he:
+    VS_BO_HDZ150319_34_myo:
+      tif: "{inputs}/substrate_cmflag/he/BO_HDZ150319_34_myo.tif"
+      H_um_to_px: [[2.6441182394572955, 0.01896021047014374, -4329.340480445926],
+                   [-0.021098253618427966, 2.643043965480947, -11366.046907356977], [0.0, 0.0, 1.0]]
+      regime: highres_microscopy_sift_refined
+    VS_CA_H0054LV_henricke_myo:
+      tif: "{heart}/scanpy_analysis/ficture/fullslide_2um_L3/_mdc_he/CA_H0054LV_henricke_myo.tif"
+      H_um_to_px: [[2.6452741747212114, 0.0, 0.0], [0.0, 2.6452741747212114, 0.0], [0.0, 0.0, 1.0]]
+      regime: cytassist_fullres_direct
+  field_um: 120              # square field side
+  show_types: [Arterial Endothelial cells, Capillary Endothelial cells, Venous Endothelial cells, Pericytes,
+               Vascular Smooth Muscle cells]
+  hatch_flagged: true        # with --flags-dir, CMFLAG-removed bins count as unassigned
+  # Candidate fields from the structure table (scripts/vascular/fig4f_fields.py candidates ->
+  # results/vascular/fig4f/candidates.csv). Set `selected` to one id per class.
+  # Ranked by vote_VSMC + vote_ArterialEC (arterioles) or vote_VenousEC + vote_VSMC (venules); struct = structure id in
+  # the table the candidates were ranked on (ids can differ between decodes; a field is defined by its centre);
+  # centre = structure centroid (um, FICTURE frame).
+  candidates:
+    BO_HDZ_myo_art1:     {slide: VS_BO_HDZ150319_34_myo, klass: arteriole, struct: 3949, x_um: 3087.8, y_um: 8090.3, diam_um: 53.4}
+    BO_HDZ_myo_art2:     {slide: VS_BO_HDZ150319_34_myo, klass: arteriole, struct: 897, x_um: 3166.6, y_um: 5888.6, diam_um: 57.8}
+    BO_HDZ_myo_art3:     {slide: VS_BO_HDZ150319_34_myo, klass: arteriole, struct: 2466, x_um: 2131.8, y_um: 6965.2, diam_um: 51.1}
+    BO_HDZ_myo_art4:     {slide: VS_BO_HDZ150319_34_myo, klass: arteriole, struct: 2518, x_um: 6206.5, y_um: 6988.8, diam_um: 51.1}
+    BO_HDZ_myo_ven1:     {slide: VS_BO_HDZ150319_34_myo, klass: venule, struct: 766, x_um: 5725.3, y_um: 5756.4, diam_um: 38.3}
+    BO_HDZ_myo_ven2:     {slide: VS_BO_HDZ150319_34_myo, klass: venule, struct: 1520, x_um: 4905.2, y_um: 6330.2, diam_um: 55.3}
+    BO_HDZ_myo_ven3:     {slide: VS_BO_HDZ150319_34_myo, klass: venule, struct: 4247, x_um: 6381.9, y_um: 8330.4, diam_um: 49.4}
+    BO_HDZ_myo_ven4:     {slide: VS_BO_HDZ150319_34_myo, klass: venule, struct: 3500, x_um: 4270.4, y_um: 7737.3, diam_um: 45.1}
+    CA_H0054LV_myo_art1: {slide: VS_CA_H0054LV_henricke_myo, klass: arteriole, struct: 6189, x_um: 5242.3, y_um: 3588.8, diam_um: 58.5}
+    CA_H0054LV_myo_art2: {slide: VS_CA_H0054LV_henricke_myo, klass: arteriole, struct: 2340, x_um: 2559.2, y_um: 2003.1, diam_um: 56.7}
+    CA_H0054LV_myo_art3: {slide: VS_CA_H0054LV_henricke_myo, klass: arteriole, struct: 10108, x_um: 2285.3, y_um: 5226.3, diam_um: 53.4}
+    CA_H0054LV_myo_art4: {slide: VS_CA_H0054LV_henricke_myo, klass: arteriole, struct: 10172, x_um: 2024.8, y_um: 5254.9, diam_um: 58.5}
+    CA_H0054LV_myo_ven1: {slide: VS_CA_H0054LV_henricke_myo, klass: venule, struct: 10854, x_um: 7900.4, y_um: 5543.2, diam_um: 50.3}
+    CA_H0054LV_myo_ven2: {slide: VS_CA_H0054LV_henricke_myo, klass: venule, struct: 11907, x_um: 3154.5, y_um: 6046.7, diam_um: 39.3}
+    CA_H0054LV_myo_ven3: {slide: VS_CA_H0054LV_henricke_myo, klass: venule, struct: 10913, x_um: 2079.5, y_um: 5572.8, diam_um: 51.9}
+    CA_H0054LV_myo_ven4: {slide: VS_CA_H0054LV_henricke_myo, klass: venule, struct: 471, x_um: 5373.0, y_um: 1125.0, diam_um: 36.1}
+  # One arteriole and one venule id (contact sheet of the extracted candidates: figures/Fig4/panel_f.py --sheet ->
+  # results/vascular/fig4f/candidates_sheet.png). Empty -> panel_f.py draws the top-ranked arteriole and venule
+  # (BO_HDZ_myo_art1, BO_HDZ_myo_ven1).
+  selected: {arteriole: BO_HDZ_myo_art3, venule: CA_H0054LV_myo_ven1}
+
+# Windows shown in notebooks/03_vessels.ipynb (display only): both around the arteriole of Fig 4 f (BO_HDZ_myo_art3)
+notebook:
+  lattice_window: {centre_um: [2130, 6965], half_size_um: 300}   # lattice cells by dominant vascular type, 600 um wide
+  wall_window: {centre_um: [2130, 6965], half_size_um: 150}      # 2 um bins by wall compartment, 300 um wide
